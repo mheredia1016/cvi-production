@@ -1,1 +1,18 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Shipping Scan</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">PWT ProductionOS</div><a href="/">🖨️ Print Station</a><a href="/backend.html">🧠 Backend Control</a><a href="/shipping.html" class="active">📦 Shipping Scan</a><a href="/barcodes.html">🏷️ Barcode Sheets</a></aside><main class="main"><div class="topbar"><div><h1>Shipping Scan</h1><p>Scan order barcode before packing/shipping</p></div></div><div class="scan"><input id="scan" placeholder="Scan order barcode" autofocus></div><section class="card" id="result"><div class="empty">Scan an order to verify production status.</div></section></main></div><script>scan.addEventListener('keydown',e=>{if(e.key==='Enter')load();});async function load(){const r=await fetch('/api/order/'+scan.value.trim());if(!r.ok){result.innerHTML='<div class="error">Order not found</div>';return;}const o=await r.json();result.innerHTML=`<h2>Order #${o.orderNumber}</h2><p>${o.customer} • ${o.store}</p><p>Status: <b>${o.status}</b></p><table><tr><th>Item</th><th>SKU</th><th>Garment</th><th>Qty</th></tr>${o.items.map(i=>`<tr><td>${i.title}</td><td>${i.sku}</td><td>${i.garment} ${i.color} ${i.size}</td><td>${i.qty}</td></tr>`).join('')}</table><button onclick="alert('Shipping verification status will be added next.')">Mark Ready to Ship</button>`;}</script></body></html>
+<!doctype html><html><head><meta charset="utf-8"><title>Shipping Scan</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/dashboard.html" class="">📊 Dashboard</a><a href="/backend.html" class="">🧠 Backend Control</a><a href="/barcodes.html" class="">🏷️ Barcode Work Orders</a><a href="/" class="">🖨️ Print Station</a><a href="/qc.html" class="">✅ QC Scan</a><a href="/shipping.html" class="active">📦 Shipping Scan</a><a href="/tracking.html" class="">🔎 Tracking</a></aside><main class="main">
+<div class="topbar"><div><h1>Shipping Scan</h1><p>Scan barcode. Shipping only clears when every item passed QC.</p></div></div>
+<div class="scan"><input id="scan" placeholder="Scan barcode, example POS-581001" autofocus></div>
+<section class="card" id="panel"><div class="empty">Scan an order barcode.</div></section>
+<script>
+let order;
+scan.addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+async function load(){
+ const r=await fetch('/api/order/'+encodeURIComponent(scan.value.trim()));
+ if(!r.ok){panel.innerHTML='<div class="error">Order not found.</div>';return;}
+ order=await r.json();
+ const ready=order.items.every(i=>['qc_passed','ready_to_ship','shipped'].includes(i.status));
+ panel.innerHTML=`<h2>Order #${order.orderNumber}</h2><p>${order.customer} • ${order.store}</p><p>Bin Status: <b>${order.binStatus}</b></p><p>${ready?'<span class="success">✓ Ready to ship</span>':'<span class="error">Not ready. Missing QC passed items.</span>'}</p>`+
+ '<table><tr><th>Item</th><th>Status</th></tr>'+order.items.map(i=>`<tr><td>${i.location} — ${i.sku}</td><td>${i.status}</td></tr>`).join('')+'</table><button '+(ready?'':'disabled')+' onclick="ship()">Mark Shipped</button>';
+}
+async function ship(){const r=await fetch('/api/shipping/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({barcode:order.barcode})});const d=await r.json();if(!r.ok)alert(d.error);load();}
+</script>
+</main></div></body></html>

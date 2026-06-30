@@ -1,16 +1,20 @@
-# PWT ProductionOS - Backend Control Station MVP
+# ProductionOS Sample v1
 
-This version adds:
+A Railway/GitHub-ready sample of the Linx-style flow:
 
-- Print Station
-- Backend Control Station
+- Mock ShipStation Ready For Production tag import
+- Changes imported orders to In Production in the mock ShipStation file
+- Creates production batch
 - Garment report
+- Draft S&S purchasing preview
 - Printable barcode work orders
-- Shipping scan placeholder
-- Local Graphics Lab hot-folder agent
-- Railway/GitHub-ready setup
+- Print Station scan
+- Graphics Lab local hot-folder agent
+- QC pass/reject with reprint job
+- Shipping scan with binning/complete checks
+- Tracking events
 
-## Local run
+## Run locally
 
 ```bash
 npm install
@@ -20,51 +24,37 @@ node server.js
 Open:
 
 ```text
-http://localhost:3000
+http://localhost:3000/dashboard.html
 ```
 
-Pages:
+## Test flow
+
+1. Go to Backend Control.
+2. Preview Ready For Production.
+3. Import + Mark In Production.
+4. Go to Barcode Work Orders.
+5. Scan/use barcode:
 
 ```text
-/                  Print Station
-/backend.html      Backend Control Station
-/barcodes.html     Printable Barcode Work Orders
-/shipping.html     Shipping Scan
+POS-581001
 ```
 
-Demo scan:
-
-```text
-10031
-```
+6. Print Station: send artwork and mark printed.
+7. QC: pass or reject.
+8. Shipping: mark shipped only after QC passes.
 
 ## Railway
 
-Deploy from GitHub and add:
+Deploy from GitHub.
+
+Add variables:
 
 ```text
 AGENT_TOKEN=make-a-private-token
+SHIPSTATION_READY_TAG=Ready For Production
+SHIPSTATION_IN_PRODUCTION_TAG=In Production
 ```
 
-## Local Graphics Lab Agent
+## Next step
 
-On the backend/print-floor computer, set `.env`:
-
-```text
-SERVER_URL=https://your-railway-app.up.railway.app
-AGENT_TOKEN=the-same-private-token
-HOTFOLDER_PATH=C:\GraphicsLab\HotFolder\Printer1
-```
-
-Run:
-
-```bash
-node agent/local-agent.js
-```
-
-## Next build
-
-- Replace mock orders with ShipStation API.
-- Add real batch filters by store/date/status.
-- Add actual barcode label formats.
-- Add Postgres database on Railway.
+Replace `shipstation.mock.json` with the real ShipStation API.

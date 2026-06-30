@@ -1,28 +1,6 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"><title>PWT ProductionOS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-<div class="layout">
-  <aside class="side">
-    <div class="brand">PWT ProductionOS</div>
-    <a href="/" class="active">🖨️ Print Station</a>
-    <a href="/backend.html">🧠 Backend Control</a>
-    <a href="/shipping.html">📦 Shipping Scan</a>
-    <a href="/barcodes.html">🏷️ Barcode Sheets</a>
-  </aside>
-  <main class="main">
-    <div class="topbar"><div><h1>Print Station</h1><p>Graphics Lab Queue • Printer 1</p></div><div id="clock"></div></div>
-    <div class="scan"><input id="scanInput" placeholder="Scan ShipStation barcode / order number" autofocus><small>Demo order: 10031</small></div>
-    <div class="grid">
-      <section class="card" id="orderPanel"><div class="empty">Scan an order to load print items.</div></section>
-      <section class="card"><h2>Station Activity</h2><div id="activity" class="muted">No jobs queued yet.</div></section>
-    </div>
-  </main>
-</div>
-<script src="/app.js"></script>
-</body>
-</html>
+<!doctype html><html><head><meta charset="utf-8"><title>Print Station</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/dashboard.html" class="">📊 Dashboard</a><a href="/backend.html" class="">🧠 Backend Control</a><a href="/barcodes.html" class="">🏷️ Barcode Work Orders</a><a href="/" class="active">🖨️ Print Station</a><a href="/qc.html" class="">✅ QC Scan</a><a href="/shipping.html" class="">📦 Shipping Scan</a><a href="/tracking.html" class="">🔎 Tracking</a></aside><main class="main">
+<div class="topbar"><div><h1>Print Station</h1><p>Scan barcode → load order → send art to Graphics Lab.</p></div></div>
+<div class="scan"><input id="scanInput" placeholder="Scan barcode, example POS-581001" autofocus></div>
+<section class="grid"><div class="card" id="orderPanel"><div class="empty">Scan a barcode after importing orders.</div></div><div class="card"><h2>Station Activity</h2><div id="activity" class="muted">No current activity.</div></div></section>
+<script src="/station.js"></script>
+</main></div></body></html>

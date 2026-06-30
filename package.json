@@ -1,10 +1,9 @@
 {
-  "name": "pwt-productionos",
-  "version": "0.2.0",
+  "name": "productionos-sample-v1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
     "agent": "node agent/local-agent.js"
   },
   "dependencies": {

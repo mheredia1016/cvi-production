@@ -1,1 +1,45 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Backend Control</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">PWT ProductionOS</div><a href="/">🖨️ Print Station</a><a href="/backend.html" class="active">🧠 Backend Control</a><a href="/shipping.html">📦 Shipping Scan</a><a href="/barcodes.html">🏷️ Barcode Sheets</a></aside><main class="main"><div class="topbar"><div><h1>Backend Control Station</h1><p>Garment reports, barcode sheets, and batch release</p></div></div><div class="card no-print"><button onclick="loadOrders()">Load Today's Batch</button><button onclick="releaseOrders()">Release to Production</button><a class="button secondary" href="/barcodes.html">Print Barcode Sheets</a><button class="secondary" onclick="window.print()">Print Garment Report</button><div id="msg"></div></div><section class="card"><h2>Garment Report</h2><div id="report">Loading...</div></section><section class="card no-print"><h2>Orders in Batch</h2><div id="orders">Loading...</div></section></main></div><script>async function loadReport(){const r=await fetch('/api/reports/garments');const rows=await r.json();report.innerHTML='<table><thead><tr><th>Garment</th><th>Color</th><th>Size</th><th>Qty Needed</th></tr></thead><tbody>'+rows.map(x=>`<tr><td>${x.garment}</td><td>${x.color}</td><td>${x.size}</td><td><b>${x.qty}</b></td></tr>`).join('')+'</tbody></table>';}async function loadOrders(){const r=await fetch('/api/orders');const rows=await r.json();orders.innerHTML='<table><thead><tr><th>Order</th><th>Store</th><th>Customer</th><th>Status</th><th>Items</th></tr></thead><tbody>'+rows.map(o=>`<tr><td>#${o.orderNumber}</td><td>${o.store}</td><td>${o.customer}</td><td>${o.status}</td><td>${o.items.length}</td></tr>`).join('')+'</tbody></table>';}async function releaseOrders(){const r=await fetch('/api/orders/release',{method:'POST'});const d=await r.json();msg.innerHTML='<div class="success">✓ '+d.message+'</div>';loadOrders();}loadReport();loadOrders();</script></body></html>
+<!doctype html><html><head><meta charset="utf-8"><title>Backend Control</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/dashboard.html" class="">📊 Dashboard</a><a href="/backend.html" class="active">🧠 Backend Control</a><a href="/barcodes.html" class="">🏷️ Barcode Work Orders</a><a href="/" class="">🖨️ Print Station</a><a href="/qc.html" class="">✅ QC Scan</a><a href="/shipping.html" class="">📦 Shipping Scan</a><a href="/tracking.html" class="">🔎 Tracking</a></aside><main class="main">
+<div class="topbar"><div><h1>Backend Control Station</h1><p>Import ShipStation Ready For Production orders, create batch, print reports/barcodes.</p></div></div>
+<section class="card no-print">
+  <button onclick="previewReady()">Preview Ready For Production</button>
+  <button onclick="importReady()">Import + Mark In Production</button>
+  <button class="secondary" onclick="loadGarments()">Refresh Garment Report</button>
+  <a class="button secondary" href="/barcodes.html">Print Barcode Work Orders</a>
+  <button class="secondary" onclick="window.print()">Print Garment Report</button>
+  <button class="danger" onclick="draftSS()">Draft S&S Order</button>
+  <div id="msg"></div>
+</section>
+<section class="grid">
+  <div class="card"><h2>ShipStation Ready Preview</h2><div id="ready">Click preview.</div></div>
+  <div class="card"><h2>Batches</h2><div id="batches">No batches yet.</div></div>
+</section>
+<section class="card"><h2>Garment Report</h2><div id="garments">Import a batch first.</div></section>
+<section class="card"><h2>S&S Draft Purchase Order</h2><div id="ssdraft" class="muted">Draft after import.</div></section>
+<script>
+let currentBatch='';
+async function previewReady(){
+ const rows=await (await fetch('/api/shipstation/ready')).json();
+ ready.innerHTML=rows.length?'<table><tr><th>Order</th><th>Store</th><th>Customer</th><th>Tags</th></tr>'+rows.map(o=>`<tr><td>#${o.orderNumber}</td><td>${o.store}</td><td>${o.customer}</td><td>${o.tags.join(', ')}</td></tr>`).join('')+'</table>':'No Ready For Production orders.';
+}
+async function importReady(){
+ const d=await (await fetch('/api/import/ready',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:new Date().toISOString().slice(0,10)})})).json();
+ msg.innerHTML='<div class="success">✓ '+d.message+'</div>'; currentBatch=d.batch.id; loadBatches(); loadGarments(); previewReady();
+}
+async function loadBatches(){
+ const rows=await (await fetch('/api/batches')).json();
+ if(rows[0]) currentBatch=rows[0].id;
+ batches.innerHTML=rows.length?'<table><tr><th>Batch</th><th>Date</th><th>Orders</th></tr>'+rows.map(b=>`<tr><td>${b.id}</td><td>${b.date}</td><td>${b.orderNumbers.length}</td></tr>`).join('')+'</table>':'No batches yet.';
+}
+async function loadGarments(){
+ const url=currentBatch?'/api/reports/garments?batchId='+currentBatch:'/api/reports/garments';
+ const rows=await (await fetch(url)).json();
+ garments.innerHTML=rows.length?'<table><tr><th>Vendor SKU</th><th>Garment</th><th>Color</th><th>Size</th><th>Qty Needed</th></tr>'+rows.map(r=>`<tr><td>${r.vendorSku}</td><td>${r.garment}</td><td>${r.color}</td><td>${r.size}</td><td><b>${r.qty}</b></td></tr>`).join('')+'</table>':'No garment needs yet.';
+}
+async function draftSS(){
+ const url=currentBatch?'/api/purchasing/ss-draft?batchId='+currentBatch:'/api/purchasing/ss-draft';
+ const d=await (await fetch(url)).json();
+ ssdraft.innerHTML='<p>'+d.message+'</p><table><tr><th>Vendor SKU</th><th>Required</th><th>On Hand</th><th>Order Qty</th></tr>'+d.items.map(i=>`<tr><td>${i.vendorSku}</td><td>${i.requiredQty}</td><td>${i.onHand}</td><td><b>${i.orderQty}</b></td></tr>`).join('')+'</table><button class="danger" onclick="alert(\\'Live S&S submit disabled in sample.\\')">Submit Disabled</button>';
+}
+previewReady(); loadBatches(); loadGarments();
+</script>
+</main></div></body></html>
