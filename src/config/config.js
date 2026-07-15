@@ -4,6 +4,11 @@ import "dotenv/config";
 export const config = {
   port: Number(process.env.PORT || 3000),
   useMockData: String(process.env.USE_MOCK_DATA || "true").toLowerCase() === "true",
+  ss: {
+    apiKey: process.env.SS_API_KEY || "",
+    accountNumber: process.env.SS_ACCOUNT_NUMBER || "",
+    submitEnabled: String(process.env.SS_SUBMIT_ENABLED || "false").toLowerCase() === "true"
+  },
   shipstation: {
     apiKey: process.env.SHIPSTATION_API_KEY || "",
     apiSecret: process.env.SHIPSTATION_API_SECRET || "",

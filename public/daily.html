@@ -10,10 +10,33 @@
 </div><div id="msg"></div>
 </section>
 <section class="cards" id="metrics"></section>
+<section class="card no-print">
+  <h2>Manager Review & Validation</h2>
+  <div id="reviewSummary">Shadow import orders to run validation.</div>
+  <div id="warnings"></div>
+</section>
+<section class="card no-print">
+  <h2>Daily Checklist</h2>
+  <div id="checklist"></div>
+  <button class="secondary" onclick="markReviewed()">Mark Review Complete</button>
+  <button onclick="completeDay()">Complete Manager Day</button>
+</section>
 <section class="card no-print"><h2>Daily Label Queue</h2><div id="queue" class="queue"></div></section>
 <section class="card no-print"><h2>Order Preview</h2><div id="previewBox">Click Preview.</div></section>
 <section class="card"><div id="labels"></div></section>
 <section class="card"><h2>Garment Report</h2><div id="garments">No data.</div></section>
+<section class="card no-print">
+  <h2>S&S Draft Order — Previous-Day Garments</h2>
+  <p class="muted">Built from the selected production date. Review quantities before any future S&S submission.</p>
+  <div class="row">
+    <button onclick="loadSsDraft()">Build / Refresh Draft</button>
+    <button class="secondary" onclick="saveSsDraft()">Save Draft Changes</button>
+    <button class="secondary" onclick="reviewSsDraft()">Mark Draft Reviewed</button>
+    <button class="danger" onclick="submitSsDraft()">Submit to S&S — Disabled</button>
+  </div>
+  <div id="ssDraftSummary"></div>
+  <div id="ssDraft">No S&S draft built.</div>
+</section>
 <script>
 let current=[];
 let currentCategory='';
@@ -63,6 +86,77 @@ async function loadSettings(){
   printOrder=data.printOrder||[];
 }
 
+
+function formatTime(value){
+  return value ? new Date(value).toLocaleString() : 'Not complete';
+}
+
+async function loadReview(){
+  const response=await fetch('/api/manager/review?date='+date.value);
+  const data=await response.json();
+  const review=data.review;
+  const workflow=data.workflow;
+
+  reviewSummary.innerHTML=`
+    <div class="cards">
+      <div class="metric"><span class="muted">Orders</span><br><b>${review.orders}</b></div>
+      <div class="metric"><span class="muted">Pieces</span><br><b>${review.pieces}</b></div>
+      <div class="metric"><span class="muted">Back Prints</span><br><b>${review.backPrints}</b></div>
+      <div class="metric"><span class="muted">Warnings</span><br><b>${review.warningCount}</b></div>
+    </div>
+    <p class="${review.ready?'success':'error'}">${review.ready?'✓ Production data is ready.':'⚠ Resolve warnings before completing the manager day.'}</p>`;
+
+  warnings.innerHTML=review.warnings.length
+    ? '<table><tr><th>Problem</th><th>Order</th><th>Piece</th><th>SKU</th><th>Details</th></tr>'+
+      review.warnings.map(w=>`<tr><td>${escapeHtml(w.type)}</td><td>${escapeHtml(w.orderNumber)}</td><td>${escapeHtml(w.pieceId)}</td><td>${escapeHtml(w.sku)}</td><td>${escapeHtml(w.message)}</td></tr>`).join('')+
+      '</table>'
+    : '<p class="success">No validation warnings.</p>';
+
+  const summary=await (await fetch('/api/manager/summary?date='+date.value)).json();
+  const categoryRows=printOrder.map(type=>{
+    const state=workflow.categories?.[type];
+    const count=type==='Rush / Skip The Line'
+      ? summary.rush
+      : (summary.byType.find(x=>x.type===type)?.count||0);
+    return `<tr><td>${escapeHtml(type)}</td><td>${count}</td><td>${state?'✓ '+formatTime(state.printedAt):'Not printed'}</td></tr>`;
+  }).join('');
+
+  checklist.innerHTML=`
+    <table>
+      <tr><th>Task</th><th>Status</th></tr>
+      <tr><td>Preview In Production</td><td>${formatTime(workflow.previewedAt)}</td></tr>
+      <tr><td>Shadow Import</td><td>${formatTime(workflow.importedAt)}</td></tr>
+      <tr><td>Manager Review</td><td>${formatTime(workflow.reviewedAt)}</td></tr>
+      <tr><td>Garment Report Printed</td><td>${formatTime(workflow.garmentReportPrintedAt)}</td></tr>
+      <tr><td>S&S Draft Reviewed</td><td>${formatTime(workflow.ssDraftReviewedAt)}</td></tr>
+      <tr><td>Manager Day Complete</td><td>${formatTime(workflow.completedAt)}</td></tr>
+    </table>
+    <h3>Label Groups</h3>
+    <table><tr><th>Category</th><th>Labels</th><th>Status</th></tr>${categoryRows}</table>`;
+}
+
+async function markReviewed(){
+  const response=await fetch('/api/manager/workflow-step',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value,step:'reviewedAt'})
+  });
+  const data=await response.json();
+  msg.innerHTML=response.ok?'<div class="success">✓ Manager review marked complete.</div>':'<div class="error">'+data.error+'</div>';
+  loadReview();
+}
+
+async function completeDay(){
+  const response=await fetch('/api/manager/complete-day',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value})
+  });
+  const data=await response.json();
+  msg.innerHTML=response.ok?'<div class="success">✓ Manager day completed.</div>':'<div class="error">'+data.error+'</div>';
+  loadReview();
+}
+
 async function loadSummary(){
   const data=await (await fetch('/api/manager/summary?date='+date.value)).json();
 
@@ -100,7 +194,10 @@ async function openGroup(type,isRush){
     `<div class="no-print"><h2>${type}</h2><p>${current.length} labels • ${currentStock.toUpperCase()} stock</p>`+
     `<button onclick="printLabelsOnly()">Print Labels</button> `+
     `<button class="secondary" onclick="markPrinted()">Mark Printed</button></div>`+
-    current.map(thermalLabelHtml).join('');
+    current.map(piece=>thermalLabelHtml(piece)+
+      `<div class="no-print" style="margin-bottom:12px">
+        <button class="secondary" onclick="reprintOne('${piece.pieceId}')">Reprint ${piece.pieceId}</button>
+      </div>`).join('');
 }
 
 
@@ -195,6 +292,31 @@ async function printGarmentReport(){
   popup.document.close();
   popup.focus();
   setTimeout(()=>popup.print(),300);
+  fetch('/api/manager/workflow-step',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value,step:'garmentReportPrintedAt'})
+  }).then(()=>loadReview());
+}
+
+
+async function reprintOne(pieceId){
+  const response=await fetch('/api/manager/reprint-label',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pieceId})
+  });
+  const data=await response.json();
+  if(!response.ok){
+    msg.innerHTML='<div class="error">'+data.error+'</div>';
+    return;
+  }
+
+  const original=current;
+  current=[data.piece];
+  printLabelsOnly();
+  current=original;
+  msg.innerHTML='<div class="success">✓ Reprint opened for piece '+escapeHtml(pieceId)+'.</div>';
 }
 
 async function markPrinted(){
@@ -223,9 +345,122 @@ async function loadGarments(){
     : 'No garment data.';
 }
 
+
+let currentSsDraft=null;
+
+function ssDraftRow(item){
+  return `<tr data-line-id="${escapeHtml(item.lineId)}">
+    <td><input class="ss-sku" value="${escapeHtml(item.supplierSku)}" style="width:145px"></td>
+    <td>${escapeHtml(item.style)}</td>
+    <td>${escapeHtml(item.color)}</td>
+    <td>${escapeHtml(item.size)}</td>
+    <td>${escapeHtml(item.type)}</td>
+    <td>${item.requiredQty}</td>
+    <td><input class="ss-onhand" type="number" min="0" value="${item.onHandQty}" style="width:75px"></td>
+    <td><input class="ss-orderqty" type="number" min="0" value="${item.orderQty}" style="width:75px"></td>
+    <td><input class="ss-notes" value="${escapeHtml(item.notes)}" style="width:160px"></td>
+  </tr>`;
+}
+
+async function loadSsDraft(){
+  const response=await fetch('/api/manager/ss-draft?date='+date.value);
+  const data=await response.json();
+
+  if(!response.ok){
+    ssDraft.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  currentSsDraft=data.draft;
+  ssDraftSummary.innerHTML=`
+    <div class="cards">
+      <div class="metric"><span class="muted">Draft Lines</span><br><b>${data.summary.lines}</b></div>
+      <div class="metric"><span class="muted">Garments Required</span><br><b>${data.summary.requiredQty}</b></div>
+      <div class="metric"><span class="muted">On Hand</span><br><b>${data.summary.onHandQty}</b></div>
+      <div class="metric"><span class="muted">Order Qty</span><br><b>${data.summary.orderQty}</b></div>
+    </div>
+    <p class="${data.summary.missingSupplierSku?'error':'success'}">
+      ${data.summary.missingSupplierSku
+        ? '⚠ '+data.summary.missingSupplierSku+' line(s) need an S&S supplier SKU.'
+        : '✓ All draft lines have a supplier SKU.'}
+    </p>
+    <p class="muted">${escapeHtml(data.warning)}</p>`;
+
+  ssDraft.innerHTML=currentSsDraft.items.length
+    ? `<table id="ssDraftTable">
+        <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Required</th><th>On Hand</th><th>Order</th><th>Notes</th></tr>
+        ${currentSsDraft.items.map(ssDraftRow).join('')}
+      </table>`
+    : '<p>No garment lines for this date.</p>';
+}
+
+function collectSsDraftItems(){
+  if(!currentSsDraft) return [];
+  const rows=[...document.querySelectorAll('#ssDraftTable tr[data-line-id]')];
+
+  return rows.map((row,index)=>{
+    const original=currentSsDraft.items[index];
+    return {
+      ...original,
+      supplierSku:row.querySelector('.ss-sku').value.trim(),
+      onHandQty:Number(row.querySelector('.ss-onhand').value||0),
+      orderQty:Number(row.querySelector('.ss-orderqty').value||0),
+      notes:row.querySelector('.ss-notes').value.trim()
+    };
+  });
+}
+
+async function saveSsDraft(){
+  if(!currentSsDraft){
+    await loadSsDraft();
+    if(!currentSsDraft) return;
+  }
+
+  const response=await fetch('/api/manager/ss-draft',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value,items:collectSsDraftItems()})
+  });
+  const data=await response.json();
+
+  msg.innerHTML=response.ok
+    ? '<div class="success">✓ S&S draft changes saved.</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  if(response.ok) await loadSsDraft();
+}
+
+async function reviewSsDraft(){
+  await saveSsDraft();
+
+  const response=await fetch('/api/manager/ss-draft/review',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value})
+  });
+  const data=await response.json();
+
+  msg.innerHTML=response.ok
+    ? '<div class="success">✓ S&S draft marked reviewed.</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  await Promise.all([loadSsDraft(),loadReview()]);
+}
+
+async function submitSsDraft(){
+  const response=await fetch('/api/manager/ss-draft/submit',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value})
+  });
+  const data=await response.json();
+  msg.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+}
+
+
 async function loadAll(){
   await loadSettings();
-  await Promise.all([loadSummary(),loadGarments()]);
+  await Promise.all([loadSummary(),loadGarments(),loadReview(),loadSsDraft()]);
 }
 
 preview();

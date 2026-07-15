@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v6-modular",
-  "version": "6.1.0",
+  "name": "productionos-v6-4-ss-draft",
+  "version": "6.4.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

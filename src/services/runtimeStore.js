@@ -4,6 +4,8 @@ export const runtimeStore = {
   importedOrders: [],
   pieces: [],
   printHistory: [],
+  dailyWorkflows: {},
+  purchaseDrafts: {},
   pieceCounter: 14540600,
   settings: {
     printOrder: [
