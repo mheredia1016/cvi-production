@@ -293,6 +293,13 @@ managerRouter.post("/ss-draft", (req, res) => {
     requiredQty: Number(item.requiredQty || 0),
     onHandQty: Math.max(0, Number(item.onHandQty || 0)),
     orderQty: Math.max(0, Number(item.orderQty || 0)),
+    stockStatus: ["unknown", "in_stock", "partial", "out_of_stock"].includes(String(item.stockStatus))
+      ? String(item.stockStatus)
+      : "unknown",
+    availableQty: item.availableQty === null || item.availableQty === ""
+      ? null
+      : Math.max(0, Number(item.availableQty || 0)),
+    alternateSupplier: String(item.alternateSupplier || ""),
     notes: String(item.notes || "")
   }));
   draft.updatedAt = new Date().toISOString();
@@ -301,6 +308,32 @@ managerRouter.post("/ss-draft", (req, res) => {
     success: true,
     draft,
     summary: summarizeSsDraft(draft)
+  });
+});
+
+
+managerRouter.get("/ss-draft/out-of-stock", (req, res) => {
+  const date = req.query.date || "";
+  const draft = runtimeStore.purchaseDrafts[date];
+
+  if (!draft) return res.status(404).json({ error: "S&S draft not found." });
+
+  const items = (draft.items || []).filter(
+    (item) => item.stockStatus === "out_of_stock" || item.stockStatus === "partial"
+  );
+
+  res.json({
+    productionDate: date,
+    vendor: "S&S Activewear",
+    createdAt: new Date().toISOString(),
+    items,
+    totals: {
+      lines: items.length,
+      orderQty: items.reduce((sum, item) => {
+        const available = item.availableQty === null ? 0 : Number(item.availableQty || 0);
+        return sum + Math.max(0, Number(item.orderQty || 0) - available);
+      }, 0)
+    }
   });
 });
 

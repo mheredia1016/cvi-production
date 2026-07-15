@@ -1,7 +1,9 @@
+
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "../config/config.js";
+import { splitProductionItems } from "./productionItemFilter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,13 +80,8 @@ async function cached(key, ttlMs, loader, forceRefresh = false) {
   const current = cache.get(key);
   const now = Date.now();
 
-  if (!forceRefresh && current && current.expiresAt > now) {
-    return current.value;
-  }
-
-  if (!forceRefresh && inflight.has(key)) {
-    return inflight.get(key);
-  }
+  if (!forceRefresh && current && current.expiresAt > now) return current.value;
+  if (!forceRefresh && inflight.has(key)) return inflight.get(key);
 
   const promise = loader()
     .then((value) => {
@@ -102,6 +99,38 @@ function option(item, name) {
     (entry) => String(entry.name || "").trim().toLowerCase() === name.toLowerCase()
   );
   return match?.value || "";
+}
+
+function normalizeItems(items = []) {
+  return items.map((item) => ({
+    orderItemId: item.orderItemId,
+    sku: item.sku || "",
+    oldSku: option(item, "Old SKU"),
+    mainSku: option(item, "Main SKU"),
+    name: item.name || "",
+    quantity: Number(item.quantity || 1),
+    backendProductInfo: option(item, "Backend Product Info"),
+    garment: option(item, "Type of Garment"),
+    style: option(item, "Style") || option(item, "Type of Garment"),
+    color: option(item, "Color"),
+    size: option(item, "Size Property") || option(item, "Size"),
+    vendorSku: item.sku || ""
+  }));
+}
+
+function normalizeOrder(order) {
+  const normalizedItems = normalizeItems(order.items || []);
+  const { productionItems, ignoredItems } = splitProductionItems(normalizedItems);
+
+  return {
+    orderId: order.orderId,
+    orderNumber: order.orderNumber,
+    storeId: Number(order.advancedOptions?.storeId || order.storeId || 0),
+    orderDate: String(order.orderDate || "").slice(0, 10),
+    customField1: order.advancedOptions?.customField1 || order.customField1 || "",
+    items: productionItems,
+    ignoredItems
+  };
 }
 
 async function getTags() {
@@ -123,7 +152,9 @@ export async function getStores(options = {}) {
 }
 
 export async function getSourceOrders(options = {}) {
-  if (config.useMockData) return readMockData().orders;
+  if (config.useMockData) {
+    return readMockData().orders.map(normalizeOrder);
+  }
 
   const cacheKey = `orders:${config.shipstation.sourceTag}:${config.shipstation.orderStatus}`;
 
@@ -145,32 +176,11 @@ export async function getSourceOrders(options = {}) {
       );
 
       orders.push(...(data.orders || []));
-
       if (page >= Number(data.pages || 1)) break;
       page += 1;
     }
 
-    return orders.map((order) => ({
-      orderId: order.orderId,
-      orderNumber: order.orderNumber,
-      storeId: Number(order.advancedOptions?.storeId || 0),
-      orderDate: String(order.orderDate || "").slice(0, 10),
-      customField1: order.advancedOptions?.customField1 || "",
-      items: (order.items || []).map((item) => ({
-        orderItemId: item.orderItemId,
-        sku: item.sku || "",
-        oldSku: option(item, "Old SKU"),
-      mainSku: option(item, "Main SKU"),
-        name: item.name || "",
-        quantity: Number(item.quantity || 1),
-        backendProductInfo: option(item, "Backend Product Info"),
-        garment: option(item, "Type of Garment"),
-        style: option(item, "Style") || option(item, "Type of Garment"),
-        color: option(item, "Color"),
-        size: option(item, "Size Property") || option(item, "Size"),
-        vendorSku: item.sku || ""
-      }))
-    }));
+    return orders.map(normalizeOrder);
   }, Boolean(options.forceRefresh));
 }
 

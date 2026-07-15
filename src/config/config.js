@@ -1,7 +1,18 @@
 
 import "dotenv/config";
 
+function csv(value = "") {
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export const config = {
+  ignoredProducts: {
+    names: csv(process.env.IGNORED_PRODUCT_NAMES || "Skip The Line (Ships Within 2-4 Business Days)"),
+    skus: csv(process.env.IGNORED_PRODUCT_SKUS || "")
+  },
   port: Number(process.env.PORT || 3000),
   useMockData: String(process.env.USE_MOCK_DATA || "true").toLowerCase() === "true",
   ss: {
@@ -25,6 +36,19 @@ export const config = {
 export const productTypes = [
   "White Ink, Back",
   "DTG Light, Back",
+  "White Ink",
+  "DTG Light",
+  "EPT",
+  "Embroidery To Order",
+  "Embroidery",
+  "Poster/Sticker",
+  "Sublimation",
+  "Pre-Stock",
+  "DTF"
+];
+
+
+export const baseProductProcesses = [
   "White Ink",
   "DTG Light",
   "EPT",

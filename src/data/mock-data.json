@@ -37,6 +37,20 @@
           "vendorSku": "G500-BLK-XL",
           "style": "Basic Unisex Heavy Cotton T-Shirt",
           "mainSku": "tftcc1005"
+        },
+        {
+          "orderItemId": 99991,
+          "sku": "",
+          "oldSku": "",
+          "mainSku": "",
+          "name": "Skip The Line (Ships Within 2-4 Business Days)",
+          "quantity": 4,
+          "backendProductInfo": "",
+          "garment": "",
+          "style": "",
+          "color": "",
+          "size": "",
+          "vendorSku": ""
         }
       ]
     },

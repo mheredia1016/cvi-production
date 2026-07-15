@@ -18,6 +18,9 @@ export function buildSsDraft(garmentRows, date) {
       requiredQty: Number(row.qty || 0),
       onHandQty: 0,
       orderQty: Number(row.qty || 0),
+      stockStatus: "unknown",
+      availableQty: null,
+      alternateSupplier: "",
       notes: ""
     }))
   };
@@ -30,6 +33,10 @@ export function summarizeSsDraft(draft) {
     requiredQty: items.reduce((sum, item) => sum + Number(item.requiredQty || 0), 0),
     onHandQty: items.reduce((sum, item) => sum + Number(item.onHandQty || 0), 0),
     orderQty: items.reduce((sum, item) => sum + Number(item.orderQty || 0), 0),
-    missingSupplierSku: items.filter((item) => !String(item.supplierSku || "").trim()).length
+    missingSupplierSku: items.filter((item) => !String(item.supplierSku || "").trim()).length,
+    outOfStockLines: items.filter((item) => item.stockStatus === "out_of_stock").length,
+    outOfStockQty: items
+      .filter((item) => item.stockStatus === "out_of_stock")
+      .reduce((sum, item) => sum + Number(item.orderQty || 0), 0)
   };
 }

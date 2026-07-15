@@ -63,3 +63,15 @@ SHIPSTATION_WRITE_ENABLED=false
 - Red label stock is used only for Skip The Line orders
 - White label stock is used for all non-rush labels
 - Manager artwork and printer-instruction inspector
+
+
+## v6.6 additions
+
+- Ignores the Skip The Line fee line item as a non-production item
+- Rush status still comes only from Custom Field 1 containing `Skip The Line`
+- Configurable ignored product names and SKUs
+- Ignored items do not create pieces, labels, garment rows, artwork warnings, or validation warnings
+- Validation recognizes `White Ink, Uncheck Black` as White Ink plus a printer instruction
+- S&S draft includes manual stock status and available quantity
+- Separate printable S&S Out-of-Stock / Buy Elsewhere report
+- Alternate supplier and notes fields

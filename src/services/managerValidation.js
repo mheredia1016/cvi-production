@@ -1,7 +1,7 @@
 
-import { productTypes } from "../config/config.js";
+import { baseProductProcesses } from "../config/config.js";
 
-const normalizedTypes = new Set(productTypes.map((value) => value.toLowerCase()));
+const normalizedTypes = new Set(baseProductProcesses.map((value) => value.toLowerCase()));
 
 function warning(type, piece, message) {
   return {
@@ -26,11 +26,11 @@ export function validateManagerDay(pieces) {
         piece,
         "Backend Product Info is missing."
       ));
-    } else if (!normalizedTypes.has(String(piece.backendProductInfo).trim().toLowerCase())) {
+    } else if (!normalizedTypes.has(String(piece.process || "").trim().toLowerCase())) {
       warnings.push(warning(
         "unknown_product_type",
         piece,
-        `Unknown Backend Product Info: ${piece.backendProductInfo}`
+        `Unknown production process parsed from Backend Product Info: ${piece.process || piece.backendProductInfo}`
       ));
     }
 

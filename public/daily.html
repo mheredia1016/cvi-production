@@ -36,6 +36,7 @@
     <button onclick="loadSsDraft()">Build / Refresh Draft</button>
     <button class="secondary" onclick="saveSsDraft()">Save Draft Changes</button>
     <button class="secondary" onclick="reviewSsDraft()">Mark Draft Reviewed</button>
+    <button onclick="printOutOfStockReport()">Print Out-of-Stock / Buy Elsewhere Report</button>
     <button class="danger" onclick="submitSsDraft()">Submit to S&S — Disabled</button>
   </div>
   <div id="ssDraftSummary"></div>
@@ -63,8 +64,9 @@ async function preview(){
     return;
   }
 
+  const ignoredCount=data.included.reduce((sum,order)=>sum+(order.ignoredItems||[]).length,0);
   previewBox.innerHTML=
-    `<p><b>${data.included.length}</b> included, <b>${data.excluded.length}</b> excluded.</p>`+
+    `<p><b>${data.included.length}</b> included, <b>${data.excluded.length}</b> excluded, <b>${ignoredCount}</b> non-production line item(s) ignored.</p>`+
     `<table><tr><th>Order</th><th>Store</th><th>Rush</th><th>Backend Product Info</th></tr>`+
     data.included.map(order=>`<tr><td>${order.orderNumber}</td><td>${order.storeName}</td><td>${order.customField1||''}</td><td>${order.items.map(item=>item.backendProductInfo).join(', ')}</td></tr>`).join('')+
     `</table>`;
@@ -393,6 +395,13 @@ async function loadGarments(){
 let currentSsDraft=null;
 
 function ssDraftRow(item){
+  const statuses=[
+    ['unknown','Unknown'],
+    ['in_stock','In Stock'],
+    ['partial','Partial'],
+    ['out_of_stock','Out of Stock']
+  ];
+
   return `<tr data-line-id="${escapeHtml(item.lineId)}">
     <td><input class="ss-sku" value="${escapeHtml(item.supplierSku)}" style="width:145px"></td>
     <td>${escapeHtml(item.style)}</td>
@@ -400,9 +409,12 @@ function ssDraftRow(item){
     <td>${escapeHtml(item.size)}</td>
     <td>${escapeHtml(item.type)}</td>
     <td>${item.requiredQty}</td>
-    <td><input class="ss-onhand" type="number" min="0" value="${item.onHandQty}" style="width:75px"></td>
-    <td><input class="ss-orderqty" type="number" min="0" value="${item.orderQty}" style="width:75px"></td>
-    <td><input class="ss-notes" value="${escapeHtml(item.notes)}" style="width:160px"></td>
+    <td><input class="ss-onhand" type="number" min="0" value="${item.onHandQty}" style="width:70px"></td>
+    <td><input class="ss-orderqty" type="number" min="0" value="${item.orderQty}" style="width:70px"></td>
+    <td><select class="ss-stock">${statuses.map(([value,label])=>`<option value="${value}" ${item.stockStatus===value?'selected':''}>${label}</option>`).join('')}</select></td>
+    <td><input class="ss-available" type="number" min="0" value="${item.availableQty??''}" style="width:70px"></td>
+    <td><input class="ss-alt" value="${escapeHtml(item.alternateSupplier||'')}" style="width:130px"></td>
+    <td><input class="ss-notes" value="${escapeHtml(item.notes)}" style="width:150px"></td>
   </tr>`;
 }
 
@@ -422,6 +434,8 @@ async function loadSsDraft(){
       <div class="metric"><span class="muted">Garments Required</span><br><b>${data.summary.requiredQty}</b></div>
       <div class="metric"><span class="muted">On Hand</span><br><b>${data.summary.onHandQty}</b></div>
       <div class="metric"><span class="muted">Order Qty</span><br><b>${data.summary.orderQty}</b></div>
+      <div class="metric"><span class="muted">Out-of-Stock Lines</span><br><b>${data.summary.outOfStockLines||0}</b></div>
+      <div class="metric"><span class="muted">Buy Elsewhere Qty</span><br><b>${data.summary.outOfStockQty||0}</b></div>
     </div>
     <p class="${data.summary.missingSupplierSku?'error':'success'}">
       ${data.summary.missingSupplierSku
@@ -432,7 +446,7 @@ async function loadSsDraft(){
 
   ssDraft.innerHTML=currentSsDraft.items.length
     ? `<table id="ssDraftTable">
-        <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Required</th><th>On Hand</th><th>Order</th><th>Notes</th></tr>
+        <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Required</th><th>On Hand</th><th>Order</th><th>S&S Stock</th><th>Available</th><th>Buy Elsewhere</th><th>Notes</th></tr>
         ${currentSsDraft.items.map(ssDraftRow).join('')}
       </table>`
     : '<p>No garment lines for this date.</p>';
@@ -449,6 +463,9 @@ function collectSsDraftItems(){
       supplierSku:row.querySelector('.ss-sku').value.trim(),
       onHandQty:Number(row.querySelector('.ss-onhand').value||0),
       orderQty:Number(row.querySelector('.ss-orderqty').value||0),
+      stockStatus:row.querySelector('.ss-stock').value,
+      availableQty:row.querySelector('.ss-available').value===''?null:Number(row.querySelector('.ss-available').value||0),
+      alternateSupplier:row.querySelector('.ss-alt').value.trim(),
       notes:row.querySelector('.ss-notes').value.trim()
     };
   });
@@ -489,6 +506,59 @@ async function reviewSsDraft(){
     : '<div class="error">'+escapeHtml(data.error)+'</div>';
 
   await Promise.all([loadSsDraft(),loadReview()]);
+}
+
+
+async function printOutOfStockReport(){
+  await saveSsDraft();
+
+  const response=await fetch('/api/manager/ss-draft/out-of-stock?date='+date.value);
+  const data=await response.json();
+
+  if(!response.ok){
+    msg.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  const popup=window.open('','_blank','width=1000,height=750');
+  const rows=data.items.map(item=>{
+    const available=item.availableQty===null?0:Number(item.availableQty||0);
+    const buyQty=Math.max(0,Number(item.orderQty||0)-available);
+    return `<tr>
+      <td>${escapeHtml(item.supplierSku)}</td>
+      <td>${escapeHtml(item.style)}</td>
+      <td>${escapeHtml(item.color)}</td>
+      <td>${escapeHtml(item.size)}</td>
+      <td>${escapeHtml(item.type)}</td>
+      <td>${item.orderQty}</td>
+      <td>${available}</td>
+      <td><b>${buyQty}</b></td>
+      <td>${escapeHtml(item.alternateSupplier||'')}</td>
+      <td>${escapeHtml(item.notes||'')}</td>
+    </tr>`;
+  }).join('');
+
+  popup.document.write(`<!doctype html>
+  <html><head><title>Out of Stock - Buy Elsewhere</title>
+  <style>
+    @page{size:letter;margin:.45in}
+    body{font-family:Arial;color:#000}
+    h1{font-size:22px;margin:0 0 4px}
+    p{margin:3px 0 14px}
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    th,td{border:1px solid #444;padding:6px;text-align:left}
+    th{background:#eee}
+  </style></head>
+  <body>
+    <h1>S&S OUT OF STOCK — BUY ELSEWHERE</h1>
+    <p>Production Date: ${escapeHtml(data.productionDate)} | Lines: ${data.totals.lines} | Qty to Buy Elsewhere: ${data.totals.orderQty}</p>
+    <table>
+      <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Needed</th><th>S&S Available</th><th>Buy Elsewhere</th><th>Alternate Supplier</th><th>Notes</th></tr>
+      ${rows || '<tr><td colspan="10">No out-of-stock or partial-stock garments.</td></tr>'}
+    </table>
+  </body></html>`);
+  popup.document.close();
+  setTimeout(()=>popup.print(),300);
 }
 
 async function submitSsDraft(){
