@@ -95,6 +95,7 @@ export async function getSourceOrders() {
       quantity: Number(item.quantity || 1),
       backendProductInfo: option(item, "Backend Product Info"),
       garment: option(item, "Type of Garment"),
+      style: option(item, "Style") || option(item, "Type of Garment"),
       color: option(item, "Color"),
       size: option(item, "Size Property") || option(item, "Size"),
       vendorSku: item.sku || ""

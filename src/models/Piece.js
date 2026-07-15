@@ -21,6 +21,7 @@ export function createPiece(data) {
     frontArtwork: data.frontArtwork,
     backArtwork: data.backArtwork,
     garment: data.garment,
+    style: data.style,
     color: data.color,
     size: data.size,
     vendorSku: data.vendorSku,

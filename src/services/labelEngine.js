@@ -33,6 +33,7 @@ export function createPiecesForOrder(order, storeName) {
         frontArtwork: artwork.front.filename,
         backArtwork: artwork.back.filename,
         garment: item.garment,
+        style: item.style || item.garment,
         color: item.color,
         size: item.size,
         vendorSku: item.vendorSku

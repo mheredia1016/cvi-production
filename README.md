@@ -1,4 +1,4 @@
-# ProductionOS v6 Modular
+# ProductionOS v6.1 Modular — Label Print + Picklist Fix
 
 This is the modular rebuild of the manager daily sample.
 
@@ -53,3 +53,11 @@ SHIPSTATION_ORDER_STATUS=awaiting_shipment
 SHIPSTATION_WRITE_ENABLED=false
 SHIPSTATION_ENABLED_STORE_IDS=YOUR_TEST_STORE_ID
 ```
+
+
+## v6.1 changes
+
+- Label Print opens a dedicated 3x1 print window containing labels only.
+- Garment report uses ShipStation `Style`.
+- Picklist columns: Style, Color, Size, Type, Qty.
+- Garment report prints in its own letter-size window.

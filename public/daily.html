@@ -6,7 +6,7 @@
 <button onclick="preview()">1. Preview In Production</button>
 <button onclick="doImport()">2. Shadow Import</button>
 <button class="secondary" onclick="loadAll()">Refresh</button>
-<button class="secondary" onclick="loadGarments()">Load Garment Report</button>
+<button class="secondary" onclick="printGarmentReport()">Print Garment Report</button>
 </div><div id="msg"></div>
 </section>
 <section class="cards" id="metrics"></section>
@@ -98,19 +98,103 @@ async function openGroup(type,isRush){
 
   labels.innerHTML=
     `<div class="no-print"><h2>${type}</h2><p>${current.length} labels • ${currentStock.toUpperCase()} stock</p>`+
-    `<button onclick="window.print()">Print</button> `+
+    `<button onclick="printLabelsOnly()">Print Labels</button> `+
     `<button class="secondary" onclick="markPrinted()">Mark Printed</button></div>`+
-    current.map(piece=>`<div class="thermal">
-      <div class="top"><span>${piece.rush?'RUSH — SKIP THE LINE':piece.orderNumber}</span><span>${piece.orderNumber}</span></div>
-      <div class="middle">
-        <div><div class="barcode">*${piece.pieceId}*</div><div class="piece">${piece.pieceId}</div></div>
-        <div class="type">${piece.backendProductInfo}<br>${piece.unitNumber} OF ${piece.unitCount}</div>
-      </div>
-      <div class="bottom">
-        <span>${piece.vendorSku} ${piece.color} ${piece.size}</span>
-        <span>${piece.oldSku}${piece.requiresBack?' / BACK':''}</span>
-      </div>
-    </div>`).join('');
+    current.map(thermalLabelHtml).join('');
+}
+
+
+function escapeHtml(value){
+  return String(value ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+}
+
+function thermalLabelHtml(piece){
+  return `<div class="thermal">
+    <div class="top"><span>${piece.rush?'RUSH — SKIP THE LINE':escapeHtml(piece.orderNumber)}</span><span>${escapeHtml(piece.orderNumber)}</span></div>
+    <div class="middle">
+      <div><div class="barcode">*${escapeHtml(piece.pieceId)}*</div><div class="piece">${escapeHtml(piece.pieceId)}</div></div>
+      <div class="type">${escapeHtml(piece.backendProductInfo)}<br>${piece.unitNumber} OF ${piece.unitCount}</div>
+    </div>
+    <div class="bottom">
+      <span>${escapeHtml(piece.style || piece.garment)} • ${escapeHtml(piece.color)} • ${escapeHtml(piece.size)}</span>
+      <span>${escapeHtml(piece.oldSku)}${piece.requiresBack?' / BACK':''}</span>
+    </div>
+  </div>`;
+}
+
+function printLabelsOnly(){
+  if(!current.length){
+    alert('No labels loaded.');
+    return;
+  }
+
+  const popup=window.open('', '_blank', 'width=900,height=700');
+  if(!popup){
+    alert('Please allow pop-ups for this site so labels can print by themselves.');
+    return;
+  }
+
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(currentCategory)} Labels</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+    <style>
+      @page{size:3in 1in;margin:0}
+      *{box-sizing:border-box}
+      html,body{margin:0;padding:0;background:#fff}
+      .thermal{width:3in;height:1in;background:#fff;color:#000;padding:.05in .07in;overflow:hidden;page-break-after:always;break-after:page;font-family:Arial,sans-serif}
+      .top{font-size:10px;font-weight:900;display:flex;justify-content:space-between;white-space:nowrap}
+      .middle{display:flex;justify-content:space-between;align-items:center}
+      .barcode{font-family:'Libre Barcode 39',monospace;font-size:32px;line-height:.75;white-space:nowrap}
+      .piece{font-size:11px;font-weight:900}
+      .type{text-align:right;font-size:10px;font-weight:900;line-height:1.05}
+      .bottom{font-size:7.5px;font-weight:700;display:flex;justify-content:space-between;gap:6px;white-space:nowrap}
+    </style></head><body>${current.map(thermalLabelHtml).join('')}</body></html>`);
+  popup.document.close();
+  popup.focus();
+  setTimeout(()=>popup.print(),700);
+}
+
+async function printGarmentReport(){
+  const rows=await (await fetch('/api/manager/garments?date='+date.value)).json();
+  if(!rows.length){
+    alert('No garment data for this date.');
+    return;
+  }
+
+  const total=rows.reduce((sum,row)=>sum+Number(row.qty||0),0);
+  const popup=window.open('', '_blank', 'width=1000,height=800');
+  if(!popup){
+    alert('Please allow pop-ups for this site so the garment report can print by itself.');
+    return;
+  }
+
+  const created=new Date().toLocaleString();
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Picklist ${escapeHtml(date.value)}</title>
+    <style>
+      @page{size:letter portrait;margin:.45in}
+      body{font-family:Arial,sans-serif;color:#000;margin:0}
+      .head{text-align:center;margin-bottom:16px}
+      .head h1{font-size:19px;margin:0 0 5px}
+      .meta{font-size:12px;font-weight:700}
+      .total{text-align:right;font-size:24px;font-weight:900;margin:6px 10px}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th{background:#bdbdbd;text-align:center;padding:4px;border-bottom:1px solid #555}
+      td{padding:4px 6px;border-bottom:1px solid #999}
+      tbody tr:nth-child(even){background:#e6e6e6}
+      td:last-child,th:last-child{text-align:center;width:55px;font-weight:700}
+    </style></head><body>
+    <div class="head"><h1>PICKLIST</h1><div class="meta">Production Date: ${escapeHtml(date.value)} &nbsp; | &nbsp; Created: ${escapeHtml(created)}</div></div>
+    <div class="total">TOTAL: ${total}</div>
+    <table><thead><tr><th>STYLE</th><th>COLOR</th><th>SIZE</th><th>TYPE</th><th>QTY</th></tr></thead><tbody>
+    ${rows.map(row=>`<tr><td>${escapeHtml(row.style)}</td><td>${escapeHtml(row.color)}</td><td>${escapeHtml(row.size)}</td><td>${escapeHtml(row.type)}</td><td>${row.qty}</td></tr>`).join('')}
+    </tbody></table></body></html>`);
+  popup.document.close();
+  popup.focus();
+  setTimeout(()=>popup.print(),300);
 }
 
 async function markPrinted(){
@@ -133,8 +217,8 @@ async function loadGarments(){
   const rows=await (await fetch('/api/manager/garments?date='+date.value)).json();
 
   garments.innerHTML=rows.length
-    ? '<table><tr><th>Vendor SKU</th><th>Garment</th><th>Color</th><th>Size</th><th>Qty</th></tr>'+
-      rows.map(row=>`<tr><td>${row.vendorSku}</td><td>${row.garment}</td><td>${row.color}</td><td>${row.size}</td><td><b>${row.qty}</b></td></tr>`).join('')+
+    ? '<table><tr><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Qty</th></tr>'+
+      rows.map(row=>`<tr><td>${row.style}</td><td>${row.color}</td><td>${row.size}</td><td>${row.type}</td><td><b>${row.qty}</b></td></tr>`).join('')+
       '</table>'
     : 'No garment data.';
 }

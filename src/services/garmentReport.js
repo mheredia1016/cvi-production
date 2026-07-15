@@ -1,4 +1,3 @@
-
 export function buildGarmentReport(pieces) {
   const units = new Map();
 
@@ -10,14 +9,16 @@ export function buildGarmentReport(pieces) {
   const grouped = new Map();
 
   for (const piece of units.values()) {
-    const key = `${piece.vendorSku}|${piece.garment}|${piece.color}|${piece.size}`;
+    const style = piece.style || piece.garment || "";
+    const type = piece.backendProductInfo || "";
+    const key = `${style}|${piece.color}|${piece.size}|${type}`;
 
     if (!grouped.has(key)) {
       grouped.set(key, {
-        vendorSku: piece.vendorSku,
-        garment: piece.garment,
-        color: piece.color,
-        size: piece.size,
+        style,
+        color: piece.color || "",
+        size: piece.size || "",
+        type,
         qty: 0
       });
     }
@@ -26,6 +27,9 @@ export function buildGarmentReport(pieces) {
   }
 
   return [...grouped.values()].sort((a, b) =>
-    String(a.vendorSku || "").localeCompare(String(b.vendorSku || ""))
+    String(a.style).localeCompare(String(b.style)) ||
+    String(a.color).localeCompare(String(b.color)) ||
+    String(a.size).localeCompare(String(b.size)) ||
+    String(a.type).localeCompare(String(b.type))
   );
 }

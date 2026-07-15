@@ -34,7 +34,8 @@
           "garment": "Basic Unisex Heavy Cotton T-Shirt",
           "color": "Black",
           "size": "X-Large",
-          "vendorSku": "G500-BLK-XL"
+          "vendorSku": "G500-BLK-XL",
+          "style": "Basic Unisex Heavy Cotton T-Shirt"
         }
       ]
     },
@@ -55,7 +56,8 @@
           "garment": "Gildan 5000",
           "color": "Black",
           "size": "Large",
-          "vendorSku": "G500-BLK-L"
+          "vendorSku": "G500-BLK-L",
+          "style": "Gildan 5000"
         }
       ]
     },
@@ -76,7 +78,8 @@
           "garment": "Poster",
           "color": "Full Color",
           "size": "18x24",
-          "vendorSku": "POSTER-18X24"
+          "vendorSku": "POSTER-18X24",
+          "style": "Poster"
         }
       ]
     }
