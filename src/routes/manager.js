@@ -46,7 +46,7 @@ managerRouter.get("/preview", async (req, res) => {
       included,
       excluded,
       rushOrders: included.filter((order) =>
-        String(order.customField1 || "").toLowerCase().includes("skip the line")
+        String(order.customField2 || "").toLowerCase().includes("skip the line")
       ).length
     });
   } catch (error) {

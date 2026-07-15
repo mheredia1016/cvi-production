@@ -22,7 +22,6 @@
       "orderNumber": "MH2001",
       "storeId": 101,
       "orderDate": "2026-07-14",
-      "customField1": "Skip The Line",
       "items": [
         {
           "orderItemId": 11,
@@ -52,14 +51,14 @@
           "size": "",
           "vendorSku": ""
         }
-      ]
+      ],
+      "customField2": "Skip The Line"
     },
     {
       "orderId": 2,
       "orderNumber": "MH2002",
       "storeId": 101,
       "orderDate": "2026-07-14",
-      "customField1": "",
       "items": [
         {
           "orderItemId": 21,
@@ -75,14 +74,14 @@
           "style": "Gildan 5000",
           "mainSku": "mh3001"
         }
-      ]
+      ],
+      "customField2": ""
     },
     {
       "orderId": 3,
       "orderNumber": "MH2003",
       "storeId": 101,
       "orderDate": "2026-07-14",
-      "customField1": "",
       "items": [
         {
           "orderItemId": 31,
@@ -98,7 +97,8 @@
           "style": "Poster",
           "mainSku": "poster01"
         }
-      ]
+      ],
+      "customField2": ""
     }
   ]
 }

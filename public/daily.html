@@ -68,7 +68,7 @@ async function preview(){
   previewBox.innerHTML=
     `<p><b>${data.included.length}</b> included, <b>${data.excluded.length}</b> excluded, <b>${ignoredCount}</b> non-production line item(s) ignored.</p>`+
     `<table><tr><th>Order</th><th>Store</th><th>Rush</th><th>Backend Product Info</th></tr>`+
-    data.included.map(order=>`<tr><td>${order.orderNumber}</td><td>${order.storeName}</td><td>${order.customField1||''}</td><td>${order.items.map(item=>item.backendProductInfo).join(', ')}</td></tr>`).join('')+
+    data.included.map(order=>`<tr><td>${order.orderNumber}</td><td>${order.storeName}</td><td>${order.customField2||''}</td><td>${order.items.map(item=>item.backendProductInfo).join(', ')}</td></tr>`).join('')+
     `</table>`;
 }
 

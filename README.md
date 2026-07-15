@@ -75,3 +75,11 @@ SHIPSTATION_WRITE_ENABLED=false
 - S&S draft includes manual stock status and available quantity
 - Separate printable S&S Out-of-Stock / Buy Elsewhere report
 - Alternate supplier and notes fields
+
+
+## v6.7 correction
+
+- Skip The Line / rush status now comes from ShipStation Custom Field 2.
+- Custom Field 1 is no longer used for rush detection.
+- Red labels are produced only when Custom Field 2 contains `Skip The Line`.
+- The Skip The Line fee line item remains ignored as a non-production item.

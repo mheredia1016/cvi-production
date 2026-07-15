@@ -127,7 +127,7 @@ function normalizeOrder(order) {
     orderNumber: order.orderNumber,
     storeId: Number(order.advancedOptions?.storeId || order.storeId || 0),
     orderDate: String(order.orderDate || "").slice(0, 10),
-    customField1: order.advancedOptions?.customField1 || order.customField1 || "",
+    customField2: order.advancedOptions?.customField2 || order.customField2 || "",
     items: productionItems,
     ignoredItems
   };

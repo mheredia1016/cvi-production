@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v6-6-ignore-fees-oos-report",
-  "version": "6.6.0",
+  "name": "productionos-v6-7-custom-field-2-rush",
+  "version": "6.7.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

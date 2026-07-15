@@ -8,7 +8,7 @@ export function createPiece(data) {
     storeId: data.storeId,
     storeName: data.storeName,
     rush: data.rush,
-    customField1: data.customField1,
+    customField2: data.customField2,
     unitNumber: data.unitNumber,
     unitCount: data.unitCount,
     sku: data.sku,
