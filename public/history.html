@@ -1,6 +1,19 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print History</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/daily.html" class="">📋 Daily Manager</a><a href="/stores.html" class="">🏪 Stores</a><a href="/history.html" class="active">🖨️ Print History</a></aside><main class="main"><div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
-<h1>Label Print History</h1><section class=card><button onclick=load()>Refresh</button><div id=box>No print history.</div></section>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print History</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/daily.html" class="">📋 Daily Manager</a><a href="/stores.html" class="">🏪 Stores</a><a href="/settings.html" class="">⚙️ Settings</a><a href="/history.html" class="active">🖨️ Print History</a></aside><main class="main"><div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
+<h1>Label Print History</h1>
+<section class="card">
+  <button onclick="load()">Refresh</button>
+  <div id="box">No print history.</div>
+</section>
 <script>
-async function load(){const rows=await (await fetch('/api/manager/print-history')).json();box.innerHTML=rows.length?'<table><tr><th>Time</th><th>Category</th><th>Stock</th><th>Count</th></tr>'+rows.map(r=>`<tr><td>${new Date(r.at).toLocaleString()}</td><td>${r.category}</td><td>${r.labelStock}</td><td>${r.count}</td></tr>`).join('')+'</table>':'No print history.'}load();
+async function load(){
+  const rows=await (await fetch('/api/manager/print-history')).json();
+
+  box.innerHTML=rows.length
+    ? '<table><tr><th>Time</th><th>Category</th><th>Stock</th><th>Count</th></tr>'+
+      rows.map(row=>`<tr><td>${new Date(row.at).toLocaleString()}</td><td>${row.category}</td><td>${row.labelStock}</td><td>${row.count}</td></tr>`).join('')+
+      '</table>'
+    : 'No print history.';
+}
+load();
 </script>
 </main></div></body></html>

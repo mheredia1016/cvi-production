@@ -1,8 +1,40 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stores</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/daily.html" class="">📋 Daily Manager</a><a href="/stores.html" class="active">🏪 Stores</a><a href="/history.html" class="">🖨️ Print History</a></aside><main class="main"><div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
-<h1>Enabled Stores</h1><section class=card><div id=box>Loading...</div><button onclick=save()>Save</button><div id=msg></div></section>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stores</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/daily.html" class="">📋 Daily Manager</a><a href="/stores.html" class="active">🏪 Stores</a><a href="/settings.html" class="">⚙️ Settings</a><a href="/history.html" class="">🖨️ Print History</a></aside><main class="main"><div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
+<h1>Enabled Stores</h1>
+<section class="card">
+  <div id="box">Loading...</div>
+  <button onclick="save()">Save</button>
+  <div id="msg"></div>
+</section>
 <script>
-async function load(){const r=await fetch('/api/stores');const d=await r.json();box.innerHTML=d.map(s=>`<label style="display:block;padding:8px"><input type=checkbox class=s value="${s.storeId}" ${s.enabled?'checked':''}> ${s.storeName} (${s.storeId})</label>`).join('')}
-async function save(){const ids=[...document.querySelectorAll('.s:checked')].map(x=>Number(x.value));await fetch('/api/stores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({storeIds:ids})});msg.innerHTML='<div class=success>✓ Saved for this test session.</div>'}
+async function load(){
+  const response=await fetch('/api/stores');
+  const data=await response.json();
+
+  if(!response.ok){
+    box.innerHTML='<div class="error">'+data.error+'</div>';
+    return;
+  }
+
+  box.innerHTML=data.map(store=>`
+    <label style="display:block;padding:8px">
+      <input type="checkbox" class="store" value="${store.storeId}" ${store.enabled?'checked':''}>
+      ${store.storeName} (${store.storeId})
+    </label>
+  `).join('');
+}
+
+async function save(){
+  const storeIds=[...document.querySelectorAll('.store:checked')].map(input=>Number(input.value));
+
+  const response=await fetch('/api/stores',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({storeIds})
+  });
+  const data=await response.json();
+
+  msg.innerHTML='<div class="success">✓ Saved '+storeIds.length+' enabled stores.</div><p class="muted">'+data.warning+'</p>';
+}
 load();
 </script>
 </main></div></body></html>

@@ -1,0 +1,84 @@
+{
+  "stores": [
+    {
+      "storeId": 101,
+      "storeName": "Merch Heroes",
+      "marketplaceName": "Shopify"
+    },
+    {
+      "storeId": 102,
+      "storeName": "ShopAEW",
+      "marketplaceName": "Shopify"
+    },
+    {
+      "storeId": 103,
+      "storeName": "Pro Wrestling Tees",
+      "marketplaceName": "Magento"
+    }
+  ],
+  "orders": [
+    {
+      "orderId": 1,
+      "orderNumber": "MH2001",
+      "storeId": 101,
+      "orderDate": "2026-07-14",
+      "customField1": "Skip The Line",
+      "items": [
+        {
+          "orderItemId": 11,
+          "sku": "7368984-4",
+          "oldSku": "aew1112",
+          "name": "Basic Unisex Heavy Cotton T-Shirt",
+          "quantity": 2,
+          "backendProductInfo": "DTF,Back",
+          "garment": "Basic Unisex Heavy Cotton T-Shirt",
+          "color": "Black",
+          "size": "X-Large",
+          "vendorSku": "G500-BLK-XL"
+        }
+      ]
+    },
+    {
+      "orderId": 2,
+      "orderNumber": "MH2002",
+      "storeId": 101,
+      "orderDate": "2026-07-14",
+      "customField1": "",
+      "items": [
+        {
+          "orderItemId": 21,
+          "sku": "MH3001",
+          "oldSku": "mh3001",
+          "name": "White Ink Tee",
+          "quantity": 3,
+          "backendProductInfo": "White Ink",
+          "garment": "Gildan 5000",
+          "color": "Black",
+          "size": "Large",
+          "vendorSku": "G500-BLK-L"
+        }
+      ]
+    },
+    {
+      "orderId": 3,
+      "orderNumber": "MH2003",
+      "storeId": 101,
+      "orderDate": "2026-07-14",
+      "customField1": "",
+      "items": [
+        {
+          "orderItemId": 31,
+          "sku": "POSTER-01",
+          "oldSku": "poster01",
+          "name": "18x24 Poster",
+          "quantity": 1,
+          "backendProductInfo": "Poster/Sticker",
+          "garment": "Poster",
+          "color": "Full Color",
+          "size": "18x24",
+          "vendorSku": "POSTER-18X24"
+        }
+      ]
+    }
+  ]
+}
