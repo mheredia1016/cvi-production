@@ -138,3 +138,10 @@ The Windows user running the terminal must have access to the mapped `Z:` drive.
 4. Click **Search Z: Artwork**.
 5. Keep the local agent terminal running.
 6. Confirm the front and optional back PNG paths and previews appear.
+
+
+## v6.8.1 fix
+
+- Railway now accepts artwork preview completion payloads up to 20 MB.
+- Local agent defaults to embedding previews only for PNGs up to 3 MB.
+- Agent now displays the real HTTP response when a completion request fails.

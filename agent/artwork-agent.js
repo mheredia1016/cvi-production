@@ -7,7 +7,7 @@ const SERVER_URL = String(process.env.SERVER_URL || "http://localhost:3000").rep
 const AGENT_TOKEN = process.env.AGENT_TOKEN || "change-this-private-token";
 const ARTWORK_ROOT = process.env.MERCH_HEROES_ARTWORK_ROOT || "Z:\\Merch Heroes\\Designs";
 const POLL_MS = Number(process.env.ARTWORK_AGENT_POLL_MS || 3000);
-const PREVIEW_MAX_BYTES = Number(process.env.ARTWORK_PREVIEW_MAX_MB || 5) * 1024 * 1024;
+const PREVIEW_MAX_BYTES = Number(process.env.ARTWORK_PREVIEW_MAX_MB || 3) * 1024 * 1024;
 
 let fileIndex = new Map();
 let indexing = false;
@@ -121,8 +121,19 @@ async function completeJob(job, payload) {
   );
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || `Could not complete ${job.id}`);
+    const responseText = await response.text();
+    let data = {};
+
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = { raw: responseText };
+    }
+
+    throw new Error(
+      data.error ||
+      `Could not complete ${job.id}. HTTP ${response.status}: ${String(data.raw || "").slice(0, 300)}`
+    );
   }
 }
 
