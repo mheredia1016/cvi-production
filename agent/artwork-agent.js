@@ -8,6 +8,7 @@ const AGENT_TOKEN = process.env.AGENT_TOKEN || "change-this-private-token";
 const ARTWORK_ROOT = process.env.MERCH_HEROES_ARTWORK_ROOT || "Z:\\Merch Heroes\\Designs";
 const POLL_MS = Number(process.env.ARTWORK_AGENT_POLL_MS || 3000);
 const PREVIEW_MAX_BYTES = Number(process.env.ARTWORK_PREVIEW_MAX_MB || 3) * 1024 * 1024;
+const GRAPHICS_TEST_HOTFOLDER = process.env.GRAPHICS_TEST_HOTFOLDER || "C:\\ProductionOS\\TestHotFolder";
 
 let fileIndex = new Map();
 let indexing = false;
@@ -175,10 +176,97 @@ async function poll() {
   }
 }
 
+
+async function getGraphicsJobs() {
+  const response = await fetch(
+    `${SERVER_URL}/api/printer/agent/graphics-jobs?token=${encodeURIComponent(AGENT_TOKEN)}`
+  );
+
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Graphics jobs endpoint returned non-JSON: ${text.slice(0, 200)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || `Graphics jobs request failed: ${response.status}`);
+  }
+
+  return data;
+}
+
+async function completeGraphicsJob(job, payload) {
+  const response = await fetch(
+    `${SERVER_URL}/api/printer/agent/graphics-jobs/${encodeURIComponent(job.id)}/complete?token=${encodeURIComponent(AGENT_TOKEN)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  const text = await response.text();
+  let data = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+      `Could not complete graphics job ${job.id}. HTTP ${response.status}: ${String(data.raw || "").slice(0, 200)}`
+    );
+  }
+}
+
+function safe(value) {
+  return String(value || "").replace(/[^a-z0-9._-]/gi, "_");
+}
+
+async function processGraphicsJob(job) {
+  try {
+    await fs.promises.mkdir(GRAPHICS_TEST_HOTFOLDER, { recursive: true });
+
+    if (!fs.existsSync(job.sourcePath)) {
+      throw new Error(`Source artwork no longer exists: ${job.sourcePath}`);
+    }
+
+    const extension = path.extname(job.sourceFilename || job.sourcePath) || ".png";
+    const outputName = `${safe(job.pieceId)}-${safe(job.orderNumber)}-${safe(job.side)}-${safe(job.artworkSku)}${extension}`;
+    const outputPath = path.join(GRAPHICS_TEST_HOTFOLDER, outputName);
+
+    await fs.promises.copyFile(job.sourcePath, outputPath);
+
+    await completeGraphicsJob(job, { outputPath });
+
+    console.log(`Graphics test copy complete: ${job.sourcePath} -> ${outputPath}`);
+  } catch (error) {
+    console.error(`Graphics job ${job.id} failed:`, error.message);
+    await completeGraphicsJob(job, { error: error.message });
+  }
+}
+
+async function pollGraphicsJobs() {
+  try {
+    const jobs = await getGraphicsJobs();
+
+    for (const job of jobs) {
+      await processGraphicsJob(job);
+    }
+  } catch (error) {
+    console.error("Graphics test agent error:", error.message);
+  }
+}
+
 async function start() {
   console.log("ProductionOS Merch Heroes Artwork Agent");
   console.log("Server:", SERVER_URL);
   console.log("Artwork root:", ARTWORK_ROOT);
+  console.log("Graphics test hot folder:", GRAPHICS_TEST_HOTFOLDER);
 
   if (!fs.existsSync(ARTWORK_ROOT)) {
     console.error(`Artwork root is not accessible: ${ARTWORK_ROOT}`);
@@ -188,7 +276,9 @@ async function start() {
   }
 
   setInterval(poll, POLL_MS);
+  setInterval(pollGraphicsJobs, Number(process.env.GRAPHICS_AGENT_POLL_MS || 2000));
   await poll();
+  await pollGraphicsJobs();
 }
 
 start().catch((error) => {

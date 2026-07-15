@@ -145,3 +145,48 @@ The Windows user running the terminal must have access to the mapped `Z:` drive.
 - Railway now accepts artwork preview completion payloads up to 20 MB.
 - Local agent defaults to embedding previews only for PNGs up to 3 MB.
 - Agent now displays the real HTTP response when a completion request fails.
+
+
+## v6.9 Graphics Lab test handoff
+
+This build adds a safe manual handoff test:
+
+1. Scan a piece.
+2. Search the Merch Heroes Z: drive.
+3. Preview front and optional back artwork.
+4. Click **Send Front to Test Hot Folder**.
+5. Click **Send Back to Test Hot Folder** when required.
+6. The local agent copies each file to:
+
+```text
+C:\ProductionOS\TestHotFolder
+```
+
+or the path configured in:
+
+```text
+GRAPHICS_TEST_HOTFOLDER=
+```
+
+7. ProductionOS tracks front/back status independently.
+8. Piece Complete appears only after all required sides were copied.
+
+No files are sent to the real Graphics Lab folder in this build.
+
+### Local `.env`
+
+```text
+SERVER_URL=https://cvi-production-production.up.railway.app
+AGENT_TOKEN=the-same-token-as-Railway
+MERCH_HEROES_ARTWORK_ROOT=Z:\Merch Heroes\Designs
+GRAPHICS_TEST_HOTFOLDER=C:\ProductionOS\TestHotFolder
+ARTWORK_AGENT_POLL_MS=3000
+GRAPHICS_AGENT_POLL_MS=2000
+ARTWORK_PREVIEW_MAX_MB=3
+```
+
+Restart the local agent after updating:
+
+```cmd
+npm.cmd run agent
+```

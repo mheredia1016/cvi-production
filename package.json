@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v6-8-1-artwork-upload-fix",
-  "version": "6.8.1",
+  "name": "productionos-v6-9-graphics-lab-test",
+  "version": "6.9.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

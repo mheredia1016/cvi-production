@@ -17,3 +17,15 @@ code{word-break:break-all}
 .art-result{background:#0f1420;border:1px solid #29354d;border-radius:14px;padding:16px}
 .art-preview{background:#fff;border-radius:12px;padding:12px;display:grid;place-items:center;min-height:260px}
 .art-preview img{max-width:100%;max-height:500px}
+
+.printer-warning{
+  background:#facc15;
+  color:#111;
+  border:4px solid #111;
+  border-radius:12px;
+  padding:18px;
+  margin-bottom:18px;
+  text-align:center;
+  font-size:28px;
+  font-weight:900;
+}

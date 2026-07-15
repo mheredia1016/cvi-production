@@ -16,9 +16,10 @@
     <a href="/printer-test.html" class="active">🖨️ Printer Scan Test</a>
     <a href="/history.html">🖨️ Print History</a>
   </aside>
+
   <main class="main">
-    <div class="shadow">ARTWORK TEST MODE — No files are copied or sent to Graphics Lab.</div>
-    <h1>Merch Heroes Barcode → Artwork Test</h1>
+    <div class="shadow">GRAPHICS LAB TEST MODE — Files copy only to the configured test hot folder.</div>
+    <h1>Barcode → Artwork → Graphics Lab Test</h1>
 
     <section class="card">
       <div class="row">
@@ -28,7 +29,6 @@
         <button onclick="loadPiece()">Load Piece</button>
         <button onclick="requestArtwork()">Search Z: Artwork</button>
       </div>
-      <p class="muted">The local agent searches Z:\Merch Heroes\Designs and every subfolder.</p>
       <div id="message"></div>
     </section>
 
@@ -37,8 +37,13 @@
     </section>
 
     <section class="card">
-      <h2>Artwork Results</h2>
+      <h2>Artwork Results & Graphics Handoff</h2>
       <div id="artworkPanel">No artwork lookup requested.</div>
+    </section>
+
+    <section class="card">
+      <h2>Piece Completion</h2>
+      <div id="completionPanel">Load a piece first.</div>
     </section>
   </main>
 </div>
@@ -46,7 +51,8 @@
 <script>
 let currentPiece=null;
 let currentLookup=null;
-let pollTimer=null;
+let lookupPoll=null;
+let statusPoll=null;
 
 function escapeHtml(value){
   return String(value??'')
@@ -62,9 +68,8 @@ scanner.addEventListener('keydown',(event)=>{
 });
 
 async function loadPiece(){
-  clearInterval(pollTimer);
-  pollTimer=null;
-  currentLookup=null;
+  clearInterval(lookupPoll);
+  clearInterval(statusPoll);
 
   const id=scanner.value.trim();
   if(!id) return;
@@ -80,7 +85,13 @@ async function loadPiece(){
   currentPiece=data.piece;
   currentLookup=data.lookup;
 
+  const instructions=(currentPiece.printerInstructions||[]);
+  const instructionHtml=instructions.includes('Uncheck Black')
+    ? '<div class="printer-warning">⚠ UNCHECK BLACK BEFORE PRINTING</div>'
+    : '<p class="muted">No special printer instructions.</p>';
+
   piecePanel.innerHTML=`
+    ${instructionHtml}
     <div class="cards">
       <div class="metric"><span class="muted">Piece</span><br><b>${escapeHtml(currentPiece.pieceId)}</b></div>
       <div class="metric"><span class="muted">Order</span><br><b>${escapeHtml(currentPiece.orderNumber)}</b></div>
@@ -93,15 +104,17 @@ async function loadPiece(){
       <tr><th>Front Expected</th><td>${escapeHtml(currentPiece.frontArtwork)}</td></tr>
       <tr><th>Back Expected</th><td>${escapeHtml(currentPiece.backArtwork||'Not required')}</td></tr>
       <tr><th>Garment</th><td>${escapeHtml(currentPiece.style||currentPiece.garment)} / ${escapeHtml(currentPiece.color)} / ${escapeHtml(currentPiece.size)}</td></tr>
-      <tr><th>Printer Instructions</th><td>${escapeHtml((currentPiece.printerInstructions||[]).join(', ')||'None')}</td></tr>
     </table>`;
 
   if(currentLookup){
     renderLookup(currentLookup);
-    if(['queued','processing'].includes(currentLookup.status)) beginPolling();
+    if(['queued','processing'].includes(currentLookup.status)) beginLookupPolling();
   }else{
     artworkPanel.innerHTML='No artwork lookup requested.';
   }
+
+  await refreshGraphicsStatus();
+  statusPoll=setInterval(refreshGraphicsStatus,1500);
 }
 
 async function requestArtwork(){
@@ -124,12 +137,12 @@ async function requestArtwork(){
   currentLookup=data.lookup;
   message.innerHTML='<div class="success">✓ '+escapeHtml(data.message)+'</div>';
   renderLookup(currentLookup);
-  beginPolling();
+  beginLookupPolling();
 }
 
-function beginPolling(){
-  clearInterval(pollTimer);
-  pollTimer=setInterval(refreshLookup,1500);
+function beginLookupPolling(){
+  clearInterval(lookupPoll);
+  lookupPoll=setInterval(refreshLookup,1500);
 }
 
 async function refreshLookup(){
@@ -137,19 +150,72 @@ async function refreshLookup(){
 
   const response=await fetch('/api/printer/lookup/'+encodeURIComponent(currentLookup.id));
   const data=await response.json();
-
   if(!response.ok) return;
 
   currentLookup=data;
   renderLookup(data);
 
   if(['complete','error'].includes(data.status)){
-    clearInterval(pollTimer);
-    pollTimer=null;
+    clearInterval(lookupPoll);
   }
 }
 
-function artCard(title,result,required){
+async function sendGraphics(side){
+  if(!currentPiece) return;
+
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/send-graphics',
+    {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({side})
+    }
+  );
+  const data=await response.json();
+
+  message.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  await refreshGraphicsStatus();
+}
+
+async function refreshGraphicsStatus(){
+  if(!currentPiece) return;
+
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/graphics-status'
+  );
+  const data=await response.json();
+
+  if(!response.ok){
+    completionPanel.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  const front=data.front;
+  const back=data.back;
+
+  completionPanel.innerHTML=`
+    <table>
+      <tr><th>Side</th><th>Status</th><th>Output</th></tr>
+      <tr>
+        <td>Front</td>
+        <td>${front?escapeHtml(front.status):'Not sent'}</td>
+        <td>${front?.outputPath?'<code>'+escapeHtml(front.outputPath)+'</code>':''}</td>
+      </tr>
+      <tr>
+        <td>Back</td>
+        <td>${currentPiece.requiresBack?(back?escapeHtml(back.status):'Not sent'):'Not required'}</td>
+        <td>${back?.outputPath?'<code>'+escapeHtml(back.outputPath)+'</code>':''}</td>
+      </tr>
+    </table>
+    <div class="${data.pieceComplete?'success':'muted'}" style="margin-top:14px;font-size:20px;font-weight:800">
+      ${data.pieceComplete?'✓ PIECE COMPLETE':'Piece is not complete yet.'}
+    </div>`;
+}
+
+function artCard(title,result,required,side){
   if(!required){
     return `<div class="art-result"><h3>${title}</h3><p class="muted">Not required.</p></div>`;
   }
@@ -159,14 +225,13 @@ function artCard(title,result,required){
   }
 
   const found=result.found;
+
   return `<div class="art-result">
     <h3>${title}: <span class="${found?'success':'error'}">${found?'FOUND':'MISSING'}</span></h3>
     <p><b>Expected:</b> ${escapeHtml(result.filename||'')}</p>
     ${result.path?`<p><b>Matched path:</b><br><code>${escapeHtml(result.path)}</code></p>`:''}
-    ${result.searchedRoot?`<p><b>Searched:</b><br><code>${escapeHtml(result.searchedRoot)}</code></p>`:''}
-    ${result.duplicateMatches?.length?`<p class="error">Duplicate matches: ${result.duplicateMatches.length}</p>`:''}
     ${result.previewDataUrl?`<div class="art-preview"><img src="${result.previewDataUrl}" alt="${title} artwork"></div>`:''}
-    ${result.previewSkipped?`<p class="muted">${escapeHtml(result.previewSkipped)}</p>`:''}
+    ${found?`<button onclick="sendGraphics('${side}')">Send ${title} to Test Hot Folder</button>`:''}
   </div>`;
 }
 
@@ -179,8 +244,8 @@ function renderLookup(lookup){
   artworkPanel.innerHTML=`
     <p><b>Status:</b> ${escapeHtml(lookup.status)}</p>
     <div class="art-grid">
-      ${artCard('Front',lookup.front,true)}
-      ${artCard('Back',lookup.back,currentPiece?.requiresBack)}
+      ${artCard('Front',lookup.front,true,'front')}
+      ${artCard('Back',lookup.back,currentPiece?.requiresBack,'back')}
     </div>`;
 }
 </script>
