@@ -83,3 +83,58 @@ SHIPSTATION_WRITE_ENABLED=false
 - Custom Field 1 is no longer used for rush detection.
 - Red labels are produced only when Custom Field 2 contains `Skip The Line`.
 - The Skip The Line fee line item remains ignored as a non-production item.
+
+
+## v6.8 Merch Heroes artwork-agent test
+
+This build proves:
+
+```text
+Piece barcode
+→ ProductionOS piece record
+→ Artwork SKU
+→ local Windows agent
+→ recursive Z:\Merch Heroes\Designs search
+→ front/back found or missing
+→ exact matched path and browser preview
+```
+
+No artwork is copied or sent to Graphics Lab.
+
+### Railway variable
+
+Use the same private value you will put in the local agent `.env`:
+
+```text
+AGENT_TOKEN=make-a-private-token
+```
+
+### Run the local agent on the Windows computer
+
+Create an `.env` file in the project folder:
+
+```text
+SERVER_URL=https://cvi-production-production.up.railway.app
+AGENT_TOKEN=the-same-private-token
+MERCH_HEROES_ARTWORK_ROOT=Z:\Merch Heroes\Designs
+ARTWORK_AGENT_POLL_MS=3000
+ARTWORK_PREVIEW_MAX_MB=5
+```
+
+Install and run:
+
+```powershell
+npm install
+npm run agent
+```
+
+The Windows user running the terminal must have access to the mapped `Z:` drive.
+
+### Test
+
+1. Shadow-import a Merch Heroes production date.
+2. Open `/printer-test.html`.
+3. Scan or type a generated piece ID.
+4. Click **Search Z: Artwork**.
+5. Keep the local agent terminal running.
+6. Confirm the front and optional back PNG paths and previews appear.

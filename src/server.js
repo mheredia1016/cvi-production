@@ -6,6 +6,7 @@ import { config } from "./config/config.js";
 import { storesRouter, initializeEnabledStores } from "./routes/stores.js";
 import { managerRouter } from "./routes/manager.js";
 import { settingsRouter } from "./routes/settings.js";
+import { printerRouter } from "./routes/printer.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,7 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 app.use("/api/stores", storesRouter);
 app.use("/api/manager", managerRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/printer", printerRouter);
 
 app.get("/health", (req, res) => {
   res.json({

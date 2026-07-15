@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Printer Scan Test</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">ProductionOS</div>
+    <a href="/daily.html">📋 Daily Manager</a>
+    <a href="/stores.html">🏪 Stores</a>
+    <a href="/settings.html">⚙️ Settings</a>
+    <a href="/printer-test.html" class="active">🖨️ Printer Scan Test</a>
+    <a href="/history.html">🖨️ Print History</a>
+  </aside>
+  <main class="main">
+    <div class="shadow">ARTWORK TEST MODE — No files are copied or sent to Graphics Lab.</div>
+    <h1>Merch Heroes Barcode → Artwork Test</h1>
+
+    <section class="card">
+      <div class="row">
+        <label>Piece Barcode
+          <input id="scanner" placeholder="Scan or type piece ID" autofocus>
+        </label>
+        <button onclick="loadPiece()">Load Piece</button>
+        <button onclick="requestArtwork()">Search Z: Artwork</button>
+      </div>
+      <p class="muted">The local agent searches Z:\Merch Heroes\Designs and every subfolder.</p>
+      <div id="message"></div>
+    </section>
+
+    <section class="card" id="piecePanel">
+      Scan a piece label after shadow-importing the production date.
+    </section>
+
+    <section class="card">
+      <h2>Artwork Results</h2>
+      <div id="artworkPanel">No artwork lookup requested.</div>
+    </section>
+  </main>
+</div>
+
+<script>
+let currentPiece=null;
+let currentLookup=null;
+let pollTimer=null;
+
+function escapeHtml(value){
+  return String(value??'')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+}
+
+scanner.addEventListener('keydown',(event)=>{
+  if(event.key==='Enter') loadPiece();
+});
+
+async function loadPiece(){
+  clearInterval(pollTimer);
+  pollTimer=null;
+  currentLookup=null;
+
+  const id=scanner.value.trim();
+  if(!id) return;
+
+  const response=await fetch('/api/printer/piece/'+encodeURIComponent(id));
+  const data=await response.json();
+
+  if(!response.ok){
+    piecePanel.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  currentPiece=data.piece;
+  currentLookup=data.lookup;
+
+  piecePanel.innerHTML=`
+    <div class="cards">
+      <div class="metric"><span class="muted">Piece</span><br><b>${escapeHtml(currentPiece.pieceId)}</b></div>
+      <div class="metric"><span class="muted">Order</span><br><b>${escapeHtml(currentPiece.orderNumber)}</b></div>
+      <div class="metric"><span class="muted">Process</span><br><b>${escapeHtml(currentPiece.process)}</b></div>
+      <div class="metric"><span class="muted">Back Print</span><br><b>${currentPiece.requiresBack?'YES':'NO'}</b></div>
+    </div>
+    <table>
+      <tr><th>Store</th><td>${escapeHtml(currentPiece.storeName)}</td></tr>
+      <tr><th>Artwork SKU</th><td>${escapeHtml(currentPiece.artworkSku)} (${escapeHtml(currentPiece.artworkSource)})</td></tr>
+      <tr><th>Front Expected</th><td>${escapeHtml(currentPiece.frontArtwork)}</td></tr>
+      <tr><th>Back Expected</th><td>${escapeHtml(currentPiece.backArtwork||'Not required')}</td></tr>
+      <tr><th>Garment</th><td>${escapeHtml(currentPiece.style||currentPiece.garment)} / ${escapeHtml(currentPiece.color)} / ${escapeHtml(currentPiece.size)}</td></tr>
+      <tr><th>Printer Instructions</th><td>${escapeHtml((currentPiece.printerInstructions||[]).join(', ')||'None')}</td></tr>
+    </table>`;
+
+  if(currentLookup){
+    renderLookup(currentLookup);
+    if(['queued','processing'].includes(currentLookup.status)) beginPolling();
+  }else{
+    artworkPanel.innerHTML='No artwork lookup requested.';
+  }
+}
+
+async function requestArtwork(){
+  if(!currentPiece){
+    message.innerHTML='<div class="error">Load a piece first.</div>';
+    return;
+  }
+
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/artwork-lookup',
+    {method:'POST'}
+  );
+  const data=await response.json();
+
+  if(!response.ok){
+    message.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  currentLookup=data.lookup;
+  message.innerHTML='<div class="success">✓ '+escapeHtml(data.message)+'</div>';
+  renderLookup(currentLookup);
+  beginPolling();
+}
+
+function beginPolling(){
+  clearInterval(pollTimer);
+  pollTimer=setInterval(refreshLookup,1500);
+}
+
+async function refreshLookup(){
+  if(!currentLookup) return;
+
+  const response=await fetch('/api/printer/lookup/'+encodeURIComponent(currentLookup.id));
+  const data=await response.json();
+
+  if(!response.ok) return;
+
+  currentLookup=data;
+  renderLookup(data);
+
+  if(['complete','error'].includes(data.status)){
+    clearInterval(pollTimer);
+    pollTimer=null;
+  }
+}
+
+function artCard(title,result,required){
+  if(!required){
+    return `<div class="art-result"><h3>${title}</h3><p class="muted">Not required.</p></div>`;
+  }
+
+  if(!result){
+    return `<div class="art-result"><h3>${title}</h3><p>Waiting for local agent...</p></div>`;
+  }
+
+  const found=result.found;
+  return `<div class="art-result">
+    <h3>${title}: <span class="${found?'success':'error'}">${found?'FOUND':'MISSING'}</span></h3>
+    <p><b>Expected:</b> ${escapeHtml(result.filename||'')}</p>
+    ${result.path?`<p><b>Matched path:</b><br><code>${escapeHtml(result.path)}</code></p>`:''}
+    ${result.searchedRoot?`<p><b>Searched:</b><br><code>${escapeHtml(result.searchedRoot)}</code></p>`:''}
+    ${result.duplicateMatches?.length?`<p class="error">Duplicate matches: ${result.duplicateMatches.length}</p>`:''}
+    ${result.previewDataUrl?`<div class="art-preview"><img src="${result.previewDataUrl}" alt="${title} artwork"></div>`:''}
+    ${result.previewSkipped?`<p class="muted">${escapeHtml(result.previewSkipped)}</p>`:''}
+  </div>`;
+}
+
+function renderLookup(lookup){
+  if(lookup.error){
+    artworkPanel.innerHTML='<div class="error">'+escapeHtml(lookup.error)+'</div>';
+    return;
+  }
+
+  artworkPanel.innerHTML=`
+    <p><b>Status:</b> ${escapeHtml(lookup.status)}</p>
+    <div class="art-grid">
+      ${artCard('Front',lookup.front,true)}
+      ${artCard('Back',lookup.back,currentPiece?.requiresBack)}
+    </div>`;
+}
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ export const runtimeStore = {
   printHistory: [],
   dailyWorkflows: {},
   purchaseDrafts: {},
+  artworkLookups: [],
   pieceCounter: 14540600,
   settings: {
     printOrder: [

@@ -1,10 +1,11 @@
 {
-  "name": "productionos-v6-7-custom-field-2-rush",
-  "version": "6.7.0",
+  "name": "productionos-v6-8-artwork-agent-test",
+  "version": "6.8.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node src/server.js"
+    "dev": "node src/server.js",
+    "agent": "node agent/artwork-agent.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

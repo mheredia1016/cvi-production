@@ -9,6 +9,7 @@ function csv(value = "") {
 }
 
 export const config = {
+  agentToken: process.env.AGENT_TOKEN || "change-this-private-token",
   ignoredProducts: {
     names: csv(process.env.IGNORED_PRODUCT_NAMES || "Skip The Line (Ships Within 2-4 Business Days)"),
     skus: csv(process.env.IGNORED_PRODUCT_SKUS || "")
