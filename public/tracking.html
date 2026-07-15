@@ -1,11 +1,1 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Tracking</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/dashboard.html" class="">📊 Dashboard</a><a href="/backend.html" class="">🧠 Backend Control</a><a href="/barcodes.html" class="">🏷️ Barcode Work Orders</a><a href="/" class="">🖨️ Print Station</a><a href="/qc.html" class="">✅ QC Scan</a><a href="/shipping.html" class="">📦 Shipping Scan</a><a href="/tracking.html" class="active">🔎 Tracking</a></aside><main class="main">
-<div class="topbar"><div><h1>Tracking</h1><p>One barcode history across production.</p></div></div>
-<section class="card"><button onclick="load()">Refresh</button><div id="events"></div></section>
-<script>
-async function load(){
- const ev=await (await fetch('/api/events')).json();
- events.innerHTML=ev.length?'<table><tr><th>Time</th><th>Order</th><th>Type</th><th>Message</th></tr>'+ev.map(e=>`<tr><td>${new Date(e.at).toLocaleString()}</td><td>#${e.orderNumber}</td><td>${e.type}</td><td>${e.message}</td></tr>`).join('')+'</table>':'No events yet.';
-}
-load();
-</script>
-</main></div></body></html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Tracking</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a class="" href="/dashboard.html">Dashboard</a><a class="" href="/backend.html">Backend Control</a><a class="" href="/piece-labels.html">Piece Labels</a><a class="" href="/">Print Station</a><a class="" href="/qc.html">QC</a><a class="" href="/shipping.html">Shipping</a><a class="active" href="/tracking.html">Tracking</a></aside><main class="main"><h1>Piece Tracking</h1><div class="card" id="events"></div><script>async function load(){let e=await(await fetch('/api/events')).json();events.innerHTML='<table>'+e.map(x=>`<tr><td>${new Date(x.at).toLocaleString()}</td><td>${x.orderNumber}</td><td>${x.pieceId||''}</td><td>${x.message}</td></tr>`).join('')+'</table>'}load()</script></main></div></body></html>

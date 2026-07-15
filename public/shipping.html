@@ -1,18 +1,1 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Shipping Scan</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/dashboard.html" class="">📊 Dashboard</a><a href="/backend.html" class="">🧠 Backend Control</a><a href="/barcodes.html" class="">🏷️ Barcode Work Orders</a><a href="/" class="">🖨️ Print Station</a><a href="/qc.html" class="">✅ QC Scan</a><a href="/shipping.html" class="active">📦 Shipping Scan</a><a href="/tracking.html" class="">🔎 Tracking</a></aside><main class="main">
-<div class="topbar"><div><h1>Shipping Scan</h1><p>Scan barcode. Shipping only clears when every item passed QC.</p></div></div>
-<div class="scan"><input id="scan" placeholder="Scan barcode, example POS-581001" autofocus></div>
-<section class="card" id="panel"><div class="empty">Scan an order barcode.</div></section>
-<script>
-let order;
-scan.addEventListener('keydown',e=>{if(e.key==='Enter')load();});
-async function load(){
- const r=await fetch('/api/order/'+encodeURIComponent(scan.value.trim()));
- if(!r.ok){panel.innerHTML='<div class="error">Order not found.</div>';return;}
- order=await r.json();
- const ready=order.items.every(i=>['qc_passed','ready_to_ship','shipped'].includes(i.status));
- panel.innerHTML=`<h2>Order #${order.orderNumber}</h2><p>${order.customer} • ${order.store}</p><p>Bin Status: <b>${order.binStatus}</b></p><p>${ready?'<span class="success">✓ Ready to ship</span>':'<span class="error">Not ready. Missing QC passed items.</span>'}</p>`+
- '<table><tr><th>Item</th><th>Status</th></tr>'+order.items.map(i=>`<tr><td>${i.location} — ${i.sku}</td><td>${i.status}</td></tr>`).join('')+'</table><button '+(ready?'':'disabled')+' onclick="ship()">Mark Shipped</button>';
-}
-async function ship(){const r=await fetch('/api/shipping/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({barcode:order.barcode})});const d=await r.json();if(!r.ok)alert(d.error);load();}
-</script>
-</main></div></body></html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Shipping</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a class="" href="/dashboard.html">Dashboard</a><a class="" href="/backend.html">Backend Control</a><a class="" href="/piece-labels.html">Piece Labels</a><a class="" href="/">Print Station</a><a class="" href="/qc.html">QC</a><a class="active" href="/shipping.html">Shipping</a><a class="" href="/tracking.html">Tracking</a></aside><main class="main"><h1>Shipping</h1><div class="scan"><input id="scan" placeholder="Scan/type order AEW165074" autofocus></div><div class="card" id="panel">Scan an order.</div><script>let o;scan.onkeydown=e=>{if(e.key==='Enter')load()};async function load(){let r=await fetch('/api/order/'+scan.value.trim());if(!r.ok)return panel.innerHTML='Not found';o=await r.json();let a=o.pieces.filter(p=>!p.isSuperseded),ready=a.every(p=>p.status==='qc_passed');panel.innerHTML=`<h2>${o.orderNumber}</h2><p>${ready?'<span class="success">Ready to ship</span>':'<span class="error">Incomplete</span>'}</p><table>${a.map(p=>`<tr><td>${p.pieceId}</td><td>${p.productType} ${p.location}</td><td>${p.status}</td></tr>`).join('')}</table><button ${ready?'':'disabled'} onclick="ship()">Mark Shipped</button>`}async function ship(){let r=await fetch('/api/order/'+o.orderNumber+'/ship',{method:'POST'}),d=await r.json();if(!r.ok)alert(d.error);load()}</script></main></div></body></html>
