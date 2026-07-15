@@ -1,31 +1,29 @@
-# ProductionOS Label Center v3
+# ProductionOS ShipStation Shadow v4
 
-Adds the manager's daily label workflow:
+Real ShipStation V1 read-only integration with store selection.
 
-- Rush orders are detected by ShipStation Custom Field 1 containing `Skip The Line`
-- Rush labels are printed first using red 3x1 thermal label stock
-- Regular labels use white 3x1 thermal stock
-- Regular labels can be filtered by Backend Product Info:
-  - White Ink, Back
-  - DTG Light, Back
-  - White Ink
-  - DTG Light
-  - EPT
-  - Embroidery To Order
-  - Embroidery
-  - Poster/Sticker
-  - Sublimation
-  - Pre-Stock
-  - DTF
-- Date filter
-- Unprinted-only filter
-- Mark printed batches
-- Garment report defaults to previous day
+## Railway variables
 
-## Test
+```text
+SHIPSTATION_API_KEY=...
+SHIPSTATION_API_SECRET=...
+SHIPSTATION_READY_TAG=Ready For Production
+SHIPSTATION_ORDER_STATUS=awaiting_shipment
+SHIPSTATION_WRITE_ENABLED=false
+USE_MOCK_DATA=false
+SHIPSTATION_ENABLED_STORE_IDS=101,102,103
+```
 
-1. Open `/backend.html`
-2. Import Ready For Production
-3. Open `/label-center.html`
-4. Print Rush first
-5. Switch to Regular and select each Product Type
+Do not commit credentials to GitHub.
+
+## Flow
+
+1. `/stores.html` loads ShipStation stores.
+2. Enable only the stores ProductionOS should use.
+3. Put those numeric IDs into `SHIPSTATION_ENABLED_STORE_IDS` in Railway for persistent configuration.
+4. `/backend.html` previews Ready For Production orders.
+5. Included and excluded orders are shown separately.
+6. Shadow Import creates internal test pieces only.
+7. No ShipStation tags or orders are changed.
+
+This version intentionally does not contain tag write calls.

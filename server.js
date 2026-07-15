@@ -3,218 +3,145 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-const ROOT = process.cwd();
+const app=express();
+const PORT=process.env.PORT||3000;
+const ROOT=process.cwd();
+const BASE="https://ssapi.shipstation.com";
+const USE_MOCK=String(process.env.USE_MOCK_DATA||"false").toLowerCase()==="true";
+const WRITE_ENABLED=String(process.env.SHIPSTATION_WRITE_ENABLED||"false").toLowerCase()==="true";
+const READY_TAG_NAME=process.env.SHIPSTATION_READY_TAG||"Ready For Production";
+const ORDER_STATUS=process.env.SHIPSTATION_ORDER_STATUS||"awaiting_shipment";
+const ENV_STORE_IDS=(process.env.SHIPSTATION_ENABLED_STORE_IDS||"").split(",").map(x=>x.trim()).filter(Boolean).map(Number);
 
-const SHIPSTATION_FILE = path.join(ROOT, "shipstation.mock.json");
-const READY_TAG = process.env.SHIPSTATION_READY_TAG || "Ready For Production";
-const IN_PRODUCTION_TAG = process.env.SHIPSTATION_IN_PRODUCTION_TAG || "In Production";
-
-const PRODUCT_TYPES = [
-  "White Ink, Back",
-  "DTG Light, Back",
-  "White Ink",
-  "DTG Light",
-  "EPT",
-  "Embroidery To Order",
-  "Embroidery",
-  "Poster/Sticker",
-  "Sublimation",
-  "Pre-Stock",
-  "DTF"
-];
-
-let productionOrders = [];
-let pieces = [];
-let labelPrintHistory = [];
-let pieceCounter = 14540600;
+let enabledStoreIds=new Set(ENV_STORE_IDS);
+let shadowImports=[];
+let pieces=[];
+let pieceCounter=14540600;
 
 app.use(express.json());
 app.use(express.static("public"));
-app.use("/artwork", express.static(path.join(ROOT, "artwork")));
 
-const readShipStation = () => JSON.parse(fs.readFileSync(SHIPSTATION_FILE, "utf8"));
-const writeShipStation = rows => fs.writeFileSync(SHIPSTATION_FILE, JSON.stringify(rows, null, 2));
-const nextPieceId = () => String(++pieceCounter);
-
-function createPieces(order) {
-  const created = [];
-  for (const item of order.items) {
-    for (let unit = 1; unit <= Number(item.qty || 0); unit++) {
-      const piece = {
-        pieceId: nextPieceId(),
-        orderNumber: order.orderNumber,
-        orderDate: order.orderDate,
-        customer: order.customer,
-        store: order.store,
-        customField1: order.customField1 || "",
-        rush: String(order.customField1 || "").toLowerCase().includes("skip the line"),
-        lineItemId: item.lineItemId,
-        unitNumber: unit,
-        unitCount: item.qty,
-        sku: item.sku,
-        title: item.title,
-        garment: item.garment,
-        color: item.color,
-        size: item.size,
-        backendProductInfo: item.backendProductInfo,
-        vendorSku: item.vendorSku,
-        artworkFile: item.artworkFile,
-        artworkUrl: `/artwork/${item.artworkFile}`,
-        printer: item.printer,
-        status: "created",
-        labelPrinted: false,
-        labelPrintedAt: null
-      };
-      pieces.push(piece);
-      created.push(piece);
-    }
+function mock(){return JSON.parse(fs.readFileSync(path.join(ROOT,"mock-data.json"),"utf8"))}
+function authHeader(){
+ const key=process.env.SHIPSTATION_API_KEY||"";
+ const secret=process.env.SHIPSTATION_API_SECRET||"";
+ return "Basic "+Buffer.from(`${key}:${secret}`).toString("base64");
+}
+async function ssGet(endpoint){
+ const r=await fetch(BASE+endpoint,{headers:{Authorization:authHeader(),Accept:"application/json"}});
+ const text=await r.text();
+ let data;try{data=JSON.parse(text)}catch{data={raw:text}}
+ if(!r.ok)throw new Error(`ShipStation ${r.status}: ${JSON.stringify(data).slice(0,500)}`);
+ return data;
+}
+function option(item,name){
+ const found=(item.options||[]).find(o=>String(o.name||"").trim().toLowerCase()===name.toLowerCase());
+ return found?.value||"";
+}
+function normalizeOrder(o,stores){
+ const store=stores.find(s=>Number(s.storeId)===Number(o.advancedOptions?.storeId||o.storeId));
+ return {
+  orderId:o.orderId,
+  orderNumber:o.orderNumber,
+  storeId:Number(o.advancedOptions?.storeId||o.storeId),
+  storeName:store?.storeName||`Store ${o.advancedOptions?.storeId||o.storeId}`,
+  orderDate:o.orderDate,
+  customField1:o.advancedOptions?.customField1||"",
+  rush:String(o.advancedOptions?.customField1||"").toLowerCase().includes("skip the line"),
+  items:(o.items||[]).map(i=>({
+    orderItemId:i.orderItemId,sku:i.sku||"",name:i.name||"",quantity:Number(i.quantity||1),
+    backendProductInfo:option(i,"Backend Product Info"),
+    garment:option(i,"Type of Garment"),
+    color:option(i,"Color"),
+    size:option(i,"Size")
+  }))
+ };
+}
+async function stores(){
+ if(USE_MOCK)return mock().stores;
+ const d=await ssGet("/stores");
+ return Array.isArray(d)?d:d.stores||[];
+}
+async function tags(){
+ if(USE_MOCK)return [{tagId:1,name:READY_TAG_NAME}];
+ const d=await ssGet("/accounts/listtags");
+ return Array.isArray(d)?d:d.tags||[];
+}
+async function readyOrders(){
+ const ssStores=await stores();
+ if(USE_MOCK)return mock().orders.map(o=>normalizeOrder(o,ssStores));
+ const allTags=await tags();
+ const tag=allTags.find(t=>String(t.name).trim().toLowerCase()===READY_TAG_NAME.toLowerCase());
+ if(!tag)throw new Error(`ShipStation tag not found: ${READY_TAG_NAME}`);
+ let page=1,orders=[];
+ while(true){
+   const d=await ssGet(`/orders/listbytag?orderStatus=${encodeURIComponent(ORDER_STATUS)}&tagId=${tag.tagId}&page=${page}&pageSize=500`);
+   const pageOrders=d.orders||[];
+   orders.push(...pageOrders);
+   if(page>=Number(d.pages||1))break;
+   page++;
+ }
+ return orders.map(o=>normalizeOrder(o,ssStores));
+}
+function createPieces(order){
+ const made=[];
+ for(const item of order.items){
+  for(let unit=1;unit<=item.quantity;unit++){
+   made.push({
+    pieceId:String(++pieceCounter),orderNumber:order.orderNumber,orderId:order.orderId,
+    storeId:order.storeId,storeName:order.storeName,rush:order.rush,
+    customField1:order.customField1,unitNumber:unit,unitCount:item.quantity,
+    sku:item.sku,title:item.name,backendProductInfo:item.backendProductInfo,
+    garment:item.garment,color:item.color,size:item.size,status:"shadow_created"
+   });
   }
-  return created;
+ }
+ return made;
 }
 
-app.get("/api/config/product-types", (req, res) => {
-  res.json(PRODUCT_TYPES);
+app.get("/api/status",(req,res)=>res.json({
+ mode:"SHADOW",writeEnabled:WRITE_ENABLED,useMockData:USE_MOCK,
+ message:"ShipStation is read-only. Linx remains in control."
+}));
+
+app.get("/api/stores",async(req,res)=>{
+ try{
+  const rows=await stores();
+  res.json(rows.map(s=>({...s,enabled:enabledStoreIds.has(Number(s.storeId))})));
+ }catch(e){res.status(500).json({error:e.message})}
 });
 
-app.get("/api/shipstation/ready", (req, res) => {
-  const rows = readShipStation().filter(o => o.tags?.includes(READY_TAG));
-  res.json(rows);
+app.post("/api/stores/enabled",(req,res)=>{
+ const ids=(req.body?.storeIds||[]).map(Number);
+ enabledStoreIds=new Set(ids);
+ res.json({success:true,storeIds:[...enabledStoreIds],warning:"Selection is held by this running service. Add IDs to SHIPSTATION_ENABLED_STORE_IDS in Railway for permanent configuration."});
 });
 
-app.post("/api/import/ready", (req, res) => {
-  let rows = readShipStation();
-  const ready = rows.filter(o => o.tags?.includes(READY_TAG));
-  let pieceCount = 0;
+app.get("/api/preview",async(req,res)=>{
+ try{
+  const all=await readyOrders();
+  const included=all.filter(o=>enabledStoreIds.has(Number(o.storeId)));
+  const excluded=all.filter(o=>!enabledStoreIds.has(Number(o.storeId)));
+  res.json({total:all.length,included,excluded,enabledStoreIds:[...enabledStoreIds]});
+ }catch(e){res.status(500).json({error:e.message})}
+});
 
-  for (const order of ready) {
-    order.tags = order.tags.filter(t => t !== READY_TAG);
-    if (!order.tags.includes(IN_PRODUCTION_TAG)) order.tags.push(IN_PRODUCTION_TAG);
-
-    if (!productionOrders.find(o => o.orderNumber === order.orderNumber)) {
-      productionOrders.push({
-        orderNumber: order.orderNumber,
-        orderDate: order.orderDate,
-        customer: order.customer,
-        store: order.store,
-        customField1: order.customField1 || "",
-        rush: String(order.customField1 || "").toLowerCase().includes("skip the line"),
-        status: "in_production"
-      });
-      pieceCount += createPieces(order).length;
-    }
+app.post("/api/shadow-import",async(req,res)=>{
+ try{
+  const all=await readyOrders();
+  const included=all.filter(o=>enabledStoreIds.has(Number(o.storeId)));
+  let newOrders=0,newPieces=0;
+  for(const order of included){
+   if(shadowImports.some(x=>x.orderId===order.orderId))continue;
+   shadowImports.push({...order,importedAt:new Date().toISOString(),mode:"shadow"});
+   const made=createPieces(order);pieces.push(...made);
+   newOrders++;newPieces+=made.length;
   }
-
-  writeShipStation(rows);
-  res.json({
-    success: true,
-    message: `Imported ${ready.length} orders and created ${pieceCount} piece labels.`
-  });
+  res.json({success:true,message:`Shadow imported ${newOrders} orders and created ${newPieces} pieces. No ShipStation data was changed.`});
+ }catch(e){res.status(500).json({error:e.message})}
 });
 
-app.get("/api/pieces", (req, res) => {
-  const { category, rush, unprinted, date } = req.query;
-  let rows = [...pieces];
+app.get("/api/shadow-orders",(req,res)=>res.json(shadowImports));
+app.get("/api/pieces",(req,res)=>res.json(pieces));
 
-  if (date) rows = rows.filter(p => p.orderDate === date);
-  if (category) rows = rows.filter(p => p.backendProductInfo === category);
-  if (rush === "true") rows = rows.filter(p => p.rush);
-  if (rush === "false") rows = rows.filter(p => !p.rush);
-  if (unprinted === "true") rows = rows.filter(p => !p.labelPrinted);
-
-  res.json(rows);
-});
-
-app.get("/api/label-summary", (req, res) => {
-  const { date } = req.query;
-  let rows = date ? pieces.filter(p => p.orderDate === date) : pieces;
-
-  const summary = {
-    rush: rows.filter(p => p.rush).length,
-    regular: rows.filter(p => !p.rush).length,
-    total: rows.length,
-    byType: PRODUCT_TYPES.map(type => ({
-      type,
-      count: rows.filter(p => !p.rush && p.backendProductInfo === type).length,
-      unprinted: rows.filter(p => !p.rush && p.backendProductInfo === type && !p.labelPrinted).length
-    }))
-  };
-
-  res.json(summary);
-});
-
-app.post("/api/labels/mark-printed", (req, res) => {
-  const { pieceIds = [], labelStock = "white", category = "" } = req.body || {};
-  const now = new Date().toISOString();
-
-  for (const id of pieceIds) {
-    const piece = pieces.find(p => p.pieceId === String(id));
-    if (piece) {
-      piece.labelPrinted = true;
-      piece.labelPrintedAt = now;
-      piece.labelStock = labelStock;
-    }
-  }
-
-  labelPrintHistory.unshift({
-    id: `PRINT-${Date.now()}`,
-    at: now,
-    pieceIds,
-    count: pieceIds.length,
-    labelStock,
-    category
-  });
-
-  res.json({ success: true, message: `Marked ${pieceIds.length} labels as printed.` });
-});
-
-app.post("/api/labels/reprint", (req, res) => {
-  const { pieceId } = req.body || {};
-  const piece = pieces.find(p => p.pieceId === String(pieceId));
-  if (!piece) return res.status(404).json({ error: "Piece not found" });
-
-  labelPrintHistory.unshift({
-    id: `REPRINT-${Date.now()}`,
-    at: new Date().toISOString(),
-    pieceIds: [piece.pieceId],
-    count: 1,
-    labelStock: piece.rush ? "red" : "white",
-    category: piece.backendProductInfo,
-    reprint: true
-  });
-
-  res.json({ success: true, piece });
-});
-
-app.get("/api/labels/history", (req, res) => res.json(labelPrintHistory));
-
-app.get("/api/reports/garments", (req, res) => {
-  const { date } = req.query;
-  let source = date ? pieces.filter(p => p.orderDate === date) : pieces;
-  const rows = new Map();
-
-  for (const piece of source) {
-    const key = `${piece.orderNumber}-${piece.lineItemId}-${piece.unitNumber}`;
-    if (!rows.has(key)) {
-      rows.set(key, {
-        vendorSku: piece.vendorSku,
-        garment: piece.garment,
-        color: piece.color,
-        size: piece.size,
-        qty: 1
-      });
-    }
-  }
-
-  const grouped = new Map();
-  for (const row of rows.values()) {
-    const key = `${row.vendorSku}||${row.garment}||${row.color}||${row.size}`;
-    if (!grouped.has(key)) grouped.set(key, { ...row, qty: 0 });
-    grouped.get(key).qty += 1;
-  }
-
-  res.json([...grouped.values()].sort((a,b) => a.vendorSku.localeCompare(b.vendorSku)));
-});
-
-app.listen(PORT, () => console.log(`ProductionOS Label Center v3 running on port ${PORT}`));
+app.listen(PORT,()=>console.log(`ProductionOS Shadow Mode running on ${PORT}`));

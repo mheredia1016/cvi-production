@@ -1,0 +1,118 @@
+{
+  "stores": [
+    {
+      "storeId": 101,
+      "storeName": "Pro Wrestling Tees",
+      "marketplaceName": "Custom Store",
+      "active": true
+    },
+    {
+      "storeId": 102,
+      "storeName": "ShopAEW",
+      "marketplaceName": "Shopify",
+      "active": true
+    },
+    {
+      "storeId": 103,
+      "storeName": "Merch Heroes",
+      "marketplaceName": "Shopify",
+      "active": true
+    },
+    {
+      "storeId": 104,
+      "storeName": "Test Store",
+      "marketplaceName": "Custom Store",
+      "active": true
+    }
+  ],
+  "orders": [
+    {
+      "orderId": 9001,
+      "orderNumber": "AEW165074",
+      "storeId": 102,
+      "orderDate": "2026-07-14",
+      "orderStatus": "awaiting_shipment",
+      "advancedOptions": {
+        "customField1": "Skip The Line"
+      },
+      "items": [
+        {
+          "orderItemId": 1,
+          "sku": "AEW5407",
+          "name": "Basic Unisex Heavy Cotton T-Shirt",
+          "quantity": 2,
+          "options": [
+            {
+              "name": "Backend Product Info",
+              "value": "White Ink, Back"
+            },
+            {
+              "name": "Color",
+              "value": "Black"
+            },
+            {
+              "name": "Size",
+              "value": "Large"
+            },
+            {
+              "name": "Type of Garment",
+              "value": "G500"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "orderId": 9002,
+      "orderNumber": "PWT581003",
+      "storeId": 101,
+      "orderDate": "2026-07-14",
+      "orderStatus": "awaiting_shipment",
+      "advancedOptions": {
+        "customField1": ""
+      },
+      "items": [
+        {
+          "orderItemId": 2,
+          "sku": "POSTER-18X24-001",
+          "name": "18x24 Poster",
+          "quantity": 1,
+          "options": [
+            {
+              "name": "Backend Product Info",
+              "value": "Poster/Sticker"
+            },
+            {
+              "name": "Size",
+              "value": "18x24"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "orderId": 9003,
+      "orderNumber": "TEST100",
+      "storeId": 104,
+      "orderDate": "2026-07-14",
+      "orderStatus": "awaiting_shipment",
+      "advancedOptions": {
+        "customField1": ""
+      },
+      "items": [
+        {
+          "orderItemId": 3,
+          "sku": "TEST-SKU",
+          "name": "Test Product",
+          "quantity": 1,
+          "options": [
+            {
+              "name": "Backend Product Info",
+              "value": "DTF"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

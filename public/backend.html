@@ -1,21 +1,20 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Backend Control</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/backend.html" class="active">🧠 Backend Control</a><a href="/label-center.html" class="">🏷️ Label Center</a><a href="/garments.html" class="">👕 Garment Report</a></aside><main class="main">
-<div class="topbar"><div><h1>Backend Control</h1><p>Import ShipStation orders tagged Ready For Production.</p></div></div>
-<section class="card">
-  <button onclick="preview()">Preview Ready Orders</button>
-  <button onclick="doImport()">Import + Change to In Production</button>
-  <a class="button secondary" href="/label-center.html">Open Label Center</a>
-  <div id="msg"></div>
-</section>
-<section class="card"><h2>Ready For Production</h2><div id="ready">Loading...</div></section>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shadow Import</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/stores.html" class="">🏪 Store Selection</a><a href="/backend.html" class="active">🧠 Shadow Import</a><a href="/pieces.html" class="">🏷️ Shadow Pieces</a></aside><main class="main"><div class="shadow">SHADOW MODE — ShipStation is read-only. Linx remains in control.</div>
+<h1>Ready For Production Preview</h1>
+<div class="card"><button onclick="preview()">Preview Enabled Stores</button><button onclick="doImport()">Shadow Import</button><div id="msg"></div></div>
+<div class="stats" id="stats"></div>
+<div class="card"><h2>Included Orders</h2><div id="included">Run preview.</div></div>
+<div class="card"><h2>Excluded Orders</h2><div id="excluded">Run preview.</div></div>
 <script>
+function table(rows){return rows.length?'<table><tr><th>Order</th><th>Store</th><th>Rush</th><th>Product Types</th></tr>'+rows.map(o=>`<tr><td>${o.orderNumber}</td><td>${o.storeName}</td><td>${o.rush?'Skip The Line':''}</td><td>${o.items.map(i=>i.backendProductInfo||'(missing)').join(', ')}</td></tr>`).join('')+'</table>':'None';}
 async function preview(){
- const rows=await (await fetch('/api/shipstation/ready')).json();
- ready.innerHTML=rows.length?'<table><tr><th>Order</th><th>Custom Field 1</th><th>Backend Product Info</th><th>Tags</th></tr>'+rows.map(o=>`<tr><td>${o.orderNumber}</td><td>${o.customField1||''}</td><td>${o.items.map(i=>i.backendProductInfo).join(', ')}</td><td>${o.tags.join(', ')}</td></tr>`).join('')+'</table>':'No Ready For Production orders.';
+ const r=await fetch('/api/preview');const d=await r.json();
+ if(!r.ok){msg.innerHTML='<div class="error">'+d.error+'</div>';return;}
+ stats.innerHTML=`<div class="stat"><span class="muted">Ready Found</span><br><b>${d.total}</b></div><div class="stat"><span class="muted">Included</span><br><b>${d.included.length}</b></div><div class="stat"><span class="muted">Excluded</span><br><b>${d.excluded.length}</b></div>`;
+ included.innerHTML=table(d.included);excluded.innerHTML=table(d.excluded);
 }
 async function doImport(){
- const d=await (await fetch('/api/import/ready',{method:'POST'})).json();
- msg.innerHTML='<div class="success">✓ '+d.message+'</div>';
- preview();
+ const r=await fetch('/api/shadow-import',{method:'POST'});const d=await r.json();
+ msg.innerHTML=r.ok?'<div class="success">✓ '+d.message+'</div>':'<div class="error">'+d.error+'</div>';
 }
 preview();
 </script>

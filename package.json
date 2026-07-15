@@ -1,10 +1,9 @@
 {
-  "name": "productionos-label-center-v3",
-  "version": "3.0.0",
+  "name": "productionos-shipstation-shadow-v4",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "agent": "node agent/local-agent.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

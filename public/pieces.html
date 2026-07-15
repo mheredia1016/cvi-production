@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shadow Pieces</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/stores.html" class="">🏪 Store Selection</a><a href="/backend.html" class="">🧠 Shadow Import</a><a href="/pieces.html" class="active">🏷️ Shadow Pieces</a></aside><main class="main"><div class="shadow">SHADOW MODE — ShipStation is read-only. Linx remains in control.</div>
+<h1>Shadow Pieces</h1><p class="muted">These records exist only inside the test app. ShipStation and Linx are unchanged.</p>
+<div class="card"><button onclick="load()">Refresh</button><div id="pieces">No pieces.</div></div>
+<script>
+async function load(){const rows=await (await fetch('/api/pieces')).json();pieces.innerHTML=rows.length?'<table><tr><th>Piece</th><th>Order</th><th>Store</th><th>Rush</th><th>Backend Product Info</th><th>SKU</th></tr>'+rows.map(p=>`<tr><td>${p.pieceId}</td><td>${p.orderNumber}</td><td>${p.storeName}</td><td>${p.rush?'YES':''}</td><td>${p.backendProductInfo}</td><td>${p.sku}</td></tr>`).join('')+'</table>':'No shadow imports yet.';}load();
+</script>
+</main></div></body></html>
