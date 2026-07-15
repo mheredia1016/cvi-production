@@ -1,14 +1,220 @@
-import "dotenv/config";import express from "express";import fs from "fs";import path from "path";
-const app=express(),PORT=process.env.PORT||3000,ROOT=process.cwd(),TOKEN=process.env.AGENT_TOKEN||"change-this-token",READY=process.env.SHIPSTATION_READY_TAG||"Ready For Production",INPROD=process.env.SHIPSTATION_IN_PRODUCTION_TAG||"In Production",FILE=path.join(ROOT,"shipstation.mock.json"),ART=path.join(ROOT,"artwork");
-let orders=[],pieces=[],jobs=[],events=[],counter=14540600;app.use(express.json());app.use(express.static("public"));app.use("/artwork",express.static(ART));
-const read=()=>JSON.parse(fs.readFileSync(FILE,"utf8"));const write=x=>fs.writeFileSync(FILE,JSON.stringify(x,null,2));const pid=()=>String(++counter);const log=(o,p,m)=>events.unshift({at:new Date().toISOString(),orderNumber:o,pieceId:p,message:m});const findP=id=>pieces.find(p=>p.pieceId===String(id));const findO=id=>orders.find(o=>o.orderNumber===id);
-function recalc(orderNumber){const o=findO(orderNumber);if(!o)return;const ps=pieces.filter(p=>p.orderNumber===orderNumber&&!p.isSuperseded);const done=ps.length&&ps.every(p=>["qc_passed","shipped"].includes(p.status));o.binStatus=done?"complete_ready_for_shipping":"incomplete";o.productionStatus=done?"qc_complete":ps.some(p=>["queued","sent_to_graphics_lab","printed","cured"].includes(p.status))?"in_production":ps.some(p=>p.status==="rejected")?"reprint_needed":"imported";}
-app.get('/api/shipstation/ready',(q,s)=>s.json(read().filter(o=>o.tags.includes(READY))));
-app.post('/api/import/ready',(q,s)=>{let rows=read(),ready=rows.filter(o=>o.tags.includes(READY)),batch=`BATCH-${new Date().toISOString().slice(0,10)}`;for(const src of ready){src.tags=src.tags.filter(t=>t!==READY);if(!src.tags.includes(INPROD))src.tags.push(INPROD);if(findO(src.orderNumber))continue;orders.push({orderNumber:src.orderNumber,customer:src.customer,store:src.store,rush:src.rush,batchId:batch,productionStatus:'imported',binStatus:'incomplete'});for(const item of src.items)for(let unit=1;unit<=item.qty;unit++)for(const step of item.steps){const p={pieceId:pid(),orderNumber:src.orderNumber,batchId:batch,lineItemId:item.lineItemId,unitNumber:unit,unitCount:item.qty,sku:item.sku,title:item.title,garment:item.garment,color:item.color,size:item.size,vendorSku:item.vendorSku,productType:step.productType,location:step.location,artworkFile:step.artworkFile,artworkUrl:`/artwork/${step.artworkFile}`,printer:step.printer,pretreat:step.pretreat,whiteInk:step.whiteInk,status:'created',isReprint:false,isSuperseded:false};pieces.push(p);log(src.orderNumber,p.pieceId,`Created ${p.productType} ${p.location} piece`)}log(src.orderNumber,null,`Imported and tagged ${INPROD}`)}write(rows);s.json({success:true,message:`Imported ${ready.length} orders and created ${pieces.length} pieces.`})});
-app.get('/api/orders',(q,s)=>s.json(orders.map(o=>({...o,pieces:pieces.filter(p=>p.orderNumber===o.orderNumber&&!p.isSuperseded)}))));app.get('/api/order/:id',(q,s)=>{const o=findO(q.params.id);if(!o)return s.status(404).json({error:'Order not found'});s.json({...o,pieces:pieces.filter(p=>p.orderNumber===o.orderNumber)})});app.get('/api/pieces',(q,s)=>s.json(pieces));app.get('/api/piece/:id',(q,s)=>{const p=findP(q.params.id);if(!p)return s.status(404).json({error:'Piece not found'});s.json({piece:p,order:findO(p.orderNumber)})});
-app.get('/api/reports/garments',(q,s)=>{const m=new Map();for(const p of pieces.filter(p=>!p.isSuperseded)){const uk=`${p.lineItemId}-${p.unitNumber}`;if([...m.values()].some(x=>x.unitKey===uk))continue;const k=p.vendorSku;if(!m.has(k))m.set(k,{unitKey:uk,vendorSku:k,garment:p.garment,color:p.color,size:p.size,qty:0});m.get(k).qty++}s.json([...m.values()].map(({unitKey,...r})=>r))});
-app.post('/api/piece/:id/send',(q,s)=>{const p=findP(q.params.id);if(!p)return s.status(404).json({error:'Piece not found'});if(!fs.existsSync(path.join(ART,p.artworkFile)))return s.status(404).json({error:'Artwork missing'});p.status='queued';const j={id:`JOB-${Date.now()}-${p.pieceId}`,pieceId:p.pieceId,orderNumber:p.orderNumber,status:'queued',printer:p.printer,artworkFile:p.artworkFile,artworkUrl:p.artworkUrl};jobs.push(j);recalc(p.orderNumber);log(p.orderNumber,p.pieceId,`Queued to ${p.printer}`);s.json({success:true,message:`Piece ${p.pieceId} queued`,job:j})});
-app.post('/api/piece/:id/status',(q,s)=>{const p=findP(q.params.id);if(!p)return s.status(404).json({error:'Piece not found'});p.status=q.body.status;recalc(p.orderNumber);log(p.orderNumber,p.pieceId,`Marked ${p.status}`);s.json({success:true,piece:p})});
-app.post('/api/piece/:id/reject',(q,s)=>{const p=findP(q.params.id);if(!p)return s.status(404).json({error:'Piece not found'});p.status='rejected';p.isSuperseded=true;const r={...p,pieceId:pid(),status:'created',isReprint:true,isSuperseded:false,originalPieceId:p.pieceId,reprintReason:q.body.reason||'QC Reject'};pieces.push(r);recalc(p.orderNumber);log(p.orderNumber,p.pieceId,'Rejected');log(r.orderNumber,r.pieceId,`Replacement for ${p.pieceId}`);s.json({success:true,message:`Created replacement ${r.pieceId}`,replacement:r})});
-app.post('/api/order/:id/ship',(q,s)=>{const o=findO(q.params.id);if(!o)return s.status(404).json({error:'Order not found'});const ps=pieces.filter(p=>p.orderNumber===o.orderNumber&&!p.isSuperseded);if(!ps.length||!ps.every(p=>p.status==='qc_passed'))return s.status(400).json({error:'All active pieces must pass QC'});ps.forEach(p=>p.status='shipped');o.productionStatus='shipped';o.binStatus='shipped';s.json({success:true})});app.get('/api/events',(q,s)=>s.json(events));
-app.get('/api/agent/jobs',(q,s)=>q.query.token!==TOKEN?s.status(401).json({error:'Unauthorized'}):s.json(jobs.filter(j=>j.status==='queued')));app.post('/api/agent/jobs/:id/complete',(q,s)=>{if(q.query.token!==TOKEN)return s.status(401).json({error:'Unauthorized'});const j=jobs.find(x=>x.id===q.params.id);if(!j)return s.status(404).json({error:'Job not found'});j.status='sent_to_graphics_lab';const p=findP(j.pieceId);if(p)p.status='sent_to_graphics_lab';s.json({success:true})});app.listen(PORT,()=>console.log(`ProductionOS v2 on ${PORT}`));
+import "dotenv/config";
+import express from "express";
+import fs from "fs";
+import path from "path";
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const ROOT = process.cwd();
+
+const SHIPSTATION_FILE = path.join(ROOT, "shipstation.mock.json");
+const READY_TAG = process.env.SHIPSTATION_READY_TAG || "Ready For Production";
+const IN_PRODUCTION_TAG = process.env.SHIPSTATION_IN_PRODUCTION_TAG || "In Production";
+
+const PRODUCT_TYPES = [
+  "White Ink, Back",
+  "DTG Light, Back",
+  "White Ink",
+  "DTG Light",
+  "EPT",
+  "Embroidery To Order",
+  "Embroidery",
+  "Poster/Sticker",
+  "Sublimation",
+  "Pre-Stock",
+  "DTF"
+];
+
+let productionOrders = [];
+let pieces = [];
+let labelPrintHistory = [];
+let pieceCounter = 14540600;
+
+app.use(express.json());
+app.use(express.static("public"));
+app.use("/artwork", express.static(path.join(ROOT, "artwork")));
+
+const readShipStation = () => JSON.parse(fs.readFileSync(SHIPSTATION_FILE, "utf8"));
+const writeShipStation = rows => fs.writeFileSync(SHIPSTATION_FILE, JSON.stringify(rows, null, 2));
+const nextPieceId = () => String(++pieceCounter);
+
+function createPieces(order) {
+  const created = [];
+  for (const item of order.items) {
+    for (let unit = 1; unit <= Number(item.qty || 0); unit++) {
+      const piece = {
+        pieceId: nextPieceId(),
+        orderNumber: order.orderNumber,
+        orderDate: order.orderDate,
+        customer: order.customer,
+        store: order.store,
+        customField1: order.customField1 || "",
+        rush: String(order.customField1 || "").toLowerCase().includes("skip the line"),
+        lineItemId: item.lineItemId,
+        unitNumber: unit,
+        unitCount: item.qty,
+        sku: item.sku,
+        title: item.title,
+        garment: item.garment,
+        color: item.color,
+        size: item.size,
+        backendProductInfo: item.backendProductInfo,
+        vendorSku: item.vendorSku,
+        artworkFile: item.artworkFile,
+        artworkUrl: `/artwork/${item.artworkFile}`,
+        printer: item.printer,
+        status: "created",
+        labelPrinted: false,
+        labelPrintedAt: null
+      };
+      pieces.push(piece);
+      created.push(piece);
+    }
+  }
+  return created;
+}
+
+app.get("/api/config/product-types", (req, res) => {
+  res.json(PRODUCT_TYPES);
+});
+
+app.get("/api/shipstation/ready", (req, res) => {
+  const rows = readShipStation().filter(o => o.tags?.includes(READY_TAG));
+  res.json(rows);
+});
+
+app.post("/api/import/ready", (req, res) => {
+  let rows = readShipStation();
+  const ready = rows.filter(o => o.tags?.includes(READY_TAG));
+  let pieceCount = 0;
+
+  for (const order of ready) {
+    order.tags = order.tags.filter(t => t !== READY_TAG);
+    if (!order.tags.includes(IN_PRODUCTION_TAG)) order.tags.push(IN_PRODUCTION_TAG);
+
+    if (!productionOrders.find(o => o.orderNumber === order.orderNumber)) {
+      productionOrders.push({
+        orderNumber: order.orderNumber,
+        orderDate: order.orderDate,
+        customer: order.customer,
+        store: order.store,
+        customField1: order.customField1 || "",
+        rush: String(order.customField1 || "").toLowerCase().includes("skip the line"),
+        status: "in_production"
+      });
+      pieceCount += createPieces(order).length;
+    }
+  }
+
+  writeShipStation(rows);
+  res.json({
+    success: true,
+    message: `Imported ${ready.length} orders and created ${pieceCount} piece labels.`
+  });
+});
+
+app.get("/api/pieces", (req, res) => {
+  const { category, rush, unprinted, date } = req.query;
+  let rows = [...pieces];
+
+  if (date) rows = rows.filter(p => p.orderDate === date);
+  if (category) rows = rows.filter(p => p.backendProductInfo === category);
+  if (rush === "true") rows = rows.filter(p => p.rush);
+  if (rush === "false") rows = rows.filter(p => !p.rush);
+  if (unprinted === "true") rows = rows.filter(p => !p.labelPrinted);
+
+  res.json(rows);
+});
+
+app.get("/api/label-summary", (req, res) => {
+  const { date } = req.query;
+  let rows = date ? pieces.filter(p => p.orderDate === date) : pieces;
+
+  const summary = {
+    rush: rows.filter(p => p.rush).length,
+    regular: rows.filter(p => !p.rush).length,
+    total: rows.length,
+    byType: PRODUCT_TYPES.map(type => ({
+      type,
+      count: rows.filter(p => !p.rush && p.backendProductInfo === type).length,
+      unprinted: rows.filter(p => !p.rush && p.backendProductInfo === type && !p.labelPrinted).length
+    }))
+  };
+
+  res.json(summary);
+});
+
+app.post("/api/labels/mark-printed", (req, res) => {
+  const { pieceIds = [], labelStock = "white", category = "" } = req.body || {};
+  const now = new Date().toISOString();
+
+  for (const id of pieceIds) {
+    const piece = pieces.find(p => p.pieceId === String(id));
+    if (piece) {
+      piece.labelPrinted = true;
+      piece.labelPrintedAt = now;
+      piece.labelStock = labelStock;
+    }
+  }
+
+  labelPrintHistory.unshift({
+    id: `PRINT-${Date.now()}`,
+    at: now,
+    pieceIds,
+    count: pieceIds.length,
+    labelStock,
+    category
+  });
+
+  res.json({ success: true, message: `Marked ${pieceIds.length} labels as printed.` });
+});
+
+app.post("/api/labels/reprint", (req, res) => {
+  const { pieceId } = req.body || {};
+  const piece = pieces.find(p => p.pieceId === String(pieceId));
+  if (!piece) return res.status(404).json({ error: "Piece not found" });
+
+  labelPrintHistory.unshift({
+    id: `REPRINT-${Date.now()}`,
+    at: new Date().toISOString(),
+    pieceIds: [piece.pieceId],
+    count: 1,
+    labelStock: piece.rush ? "red" : "white",
+    category: piece.backendProductInfo,
+    reprint: true
+  });
+
+  res.json({ success: true, piece });
+});
+
+app.get("/api/labels/history", (req, res) => res.json(labelPrintHistory));
+
+app.get("/api/reports/garments", (req, res) => {
+  const { date } = req.query;
+  let source = date ? pieces.filter(p => p.orderDate === date) : pieces;
+  const rows = new Map();
+
+  for (const piece of source) {
+    const key = `${piece.orderNumber}-${piece.lineItemId}-${piece.unitNumber}`;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        vendorSku: piece.vendorSku,
+        garment: piece.garment,
+        color: piece.color,
+        size: piece.size,
+        qty: 1
+      });
+    }
+  }
+
+  const grouped = new Map();
+  for (const row of rows.values()) {
+    const key = `${row.vendorSku}||${row.garment}||${row.color}||${row.size}`;
+    if (!grouped.has(key)) grouped.set(key, { ...row, qty: 0 });
+    grouped.get(key).qty += 1;
+  }
+
+  res.json([...grouped.values()].sort((a,b) => a.vendorSku.localeCompare(b.vendorSku)));
+});
+
+app.listen(PORT, () => console.log(`ProductionOS Label Center v3 running on port ${PORT}`));

@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Garment Report</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/backend.html" class="">🧠 Backend Control</a><a href="/label-center.html" class="">🏷️ Label Center</a><a href="/garments.html" class="active">👕 Garment Report</a></aside><main class="main">
+<div class="topbar"><div><h1>Garment Report</h1><p>Defaults to the previous day.</p></div></div>
+<section class="card no-print">
+  <label>Report Date <input type="date" id="reportDate"></label>
+  <button onclick="load()">Load Report</button>
+  <button class="secondary" onclick="window.print()">Print</button>
+</section>
+<section class="card"><div id="report">Loading...</div></section>
+<script>
+function yesterday(){const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)}
+reportDate.value=yesterday();
+async function load(){
+ const rows=await (await fetch('/api/reports/garments?date='+encodeURIComponent(reportDate.value))).json();
+ report.innerHTML=rows.length?'<table><tr><th>Vendor SKU</th><th>Garment</th><th>Color</th><th>Size</th><th>Qty</th></tr>'+rows.map(r=>`<tr><td>${r.vendorSku}</td><td>${r.garment}</td><td>${r.color}</td><td>${r.size}</td><td><b>${r.qty}</b></td></tr>`).join('')+'</table>':'No garment data.';
+}
+load();
+</script>
+</main></div></body></html>

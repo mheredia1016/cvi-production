@@ -1,10 +1,31 @@
-# ProductionOS Piece-Level v2
+# ProductionOS Label Center v3
 
-1. Deploy to Railway or run `npm install` then `node server.js`.
-2. Open `/backend.html`.
-3. Import Ready For Production orders.
-4. Open `/piece-labels.html`.
-5. Scan generated piece IDs at Print/QC.
-6. Shipping uses the parent order number.
+Adds the manager's daily label workflow:
 
-This sample creates one barcode per physical unit and production step. QC rejection creates a new replacement piece ID.
+- Rush orders are detected by ShipStation Custom Field 1 containing `Skip The Line`
+- Rush labels are printed first using red 3x1 thermal label stock
+- Regular labels use white 3x1 thermal stock
+- Regular labels can be filtered by Backend Product Info:
+  - White Ink, Back
+  - DTG Light, Back
+  - White Ink
+  - DTG Light
+  - EPT
+  - Embroidery To Order
+  - Embroidery
+  - Poster/Sticker
+  - Sublimation
+  - Pre-Stock
+  - DTF
+- Date filter
+- Unprinted-only filter
+- Mark printed batches
+- Garment report defaults to previous day
+
+## Test
+
+1. Open `/backend.html`
+2. Import Ready For Production
+3. Open `/label-center.html`
+4. Print Rush first
+5. Switch to Regular and select each Product Type

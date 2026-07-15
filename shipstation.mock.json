@@ -1,13 +1,13 @@
 [
   {
     "orderNumber": "AEW165074",
-    "orderDate": "2026-07-01",
-    "customer": "Sample AEW Customer",
+    "orderDate": "2026-07-14",
+    "customer": "Rush Customer",
     "store": "ShopAEW",
     "tags": [
       "Ready For Production"
     ],
-    "rush": true,
+    "customField1": "Skip The Line",
     "items": [
       {
         "lineItemId": "AEW165074-L1",
@@ -17,60 +17,110 @@
         "color": "Black",
         "size": "Large",
         "qty": 2,
+        "backendProductInfo": "White Ink, Back",
         "vendorSku": "G500-BLK-L",
-        "steps": [
-          {
-            "stepId": "white-ink",
-            "productType": "White Ink",
-            "location": "Front",
-            "artworkFile": "AEW5407-WHITE.png",
-            "printer": "Brother GTX2",
-            "pretreat": "Dark",
-            "whiteInk": "Yes"
-          },
-          {
-            "stepId": "dtf-back",
-            "productType": "DTF",
-            "location": "Back",
-            "artworkFile": "AEW5407-BACK.png",
-            "printer": "DTF Queue",
-            "pretreat": "None",
-            "whiteInk": "No"
-          }
-        ]
+        "artworkFile": "AEW5407-WHITE-BACK.png",
+        "printer": "Brother GTX2"
       }
     ]
   },
   {
-    "orderNumber": "PWT581002",
-    "orderDate": "2026-07-01",
-    "customer": "Sample PWT Customer",
+    "orderNumber": "AEW165075",
+    "orderDate": "2026-07-14",
+    "customer": "Regular Customer",
+    "store": "ShopAEW",
+    "tags": [
+      "Ready For Production"
+    ],
+    "customField1": "",
+    "items": [
+      {
+        "lineItemId": "AEW165075-L1",
+        "sku": "AEW5408",
+        "title": "Light Garment Tee",
+        "garment": "Soft Style Tee",
+        "color": "White",
+        "size": "XL",
+        "qty": 1,
+        "backendProductInfo": "DTG Light",
+        "vendorSku": "SS300-WHT-XL",
+        "artworkFile": "AEW5408-DTG-LIGHT.png",
+        "printer": "Brother GTX2"
+      }
+    ]
+  },
+  {
+    "orderNumber": "PWT581003",
+    "orderDate": "2026-07-14",
+    "customer": "Poster Buyer",
     "store": "Pro Wrestling Tees",
     "tags": [
       "Ready For Production"
     ],
-    "rush": false,
+    "customField1": "",
     "items": [
       {
-        "lineItemId": "PWT581002-L1",
-        "sku": "PUNK-BEST-WORLD",
-        "title": "Best In The World Tee",
+        "lineItemId": "PWT581003-L1",
+        "sku": "POSTER-18X24-001",
+        "title": "18x24 Poster",
+        "garment": "18x24 Poster",
+        "color": "Full Color",
+        "size": "18x24",
+        "qty": 2,
+        "backendProductInfo": "Poster/Sticker",
+        "vendorSku": "POSTER-18X24",
+        "artworkFile": "POSTER-18X24-001.png",
+        "printer": "Poster Queue"
+      }
+    ]
+  },
+  {
+    "orderNumber": "PWT581004",
+    "orderDate": "2026-07-14",
+    "customer": "Embroidery Buyer",
+    "store": "Pro Wrestling Tees",
+    "tags": [
+      "Ready For Production"
+    ],
+    "customField1": "",
+    "items": [
+      {
+        "lineItemId": "PWT581004-L1",
+        "sku": "EMB-HAT-001",
+        "title": "Embroidered Hat",
+        "garment": "Snapback Hat",
+        "color": "Black",
+        "size": "OS",
+        "qty": 1,
+        "backendProductInfo": "Embroidery To Order",
+        "vendorSku": "HAT-BLK-OS",
+        "artworkFile": "EMB-HAT-001.png",
+        "printer": "Embroidery Queue"
+      }
+    ]
+  },
+  {
+    "orderNumber": "PWT581005",
+    "orderDate": "2026-07-14",
+    "customer": "DTF Buyer",
+    "store": "Pro Wrestling Tees",
+    "tags": [
+      "Ready For Production"
+    ],
+    "customField1": "",
+    "items": [
+      {
+        "lineItemId": "PWT581005-L1",
+        "sku": "DTF-BACK-001",
+        "title": "DTF Back Print Tee",
         "garment": "Gildan 5000",
         "color": "Black",
-        "size": "XL",
-        "qty": 1,
-        "vendorSku": "G500-BLK-XL",
-        "steps": [
-          {
-            "stepId": "dtg-front",
-            "productType": "DTG",
-            "location": "Front",
-            "artworkFile": "PUNK-BEST-WORLD-FRONT.png",
-            "printer": "Brother GTX2",
-            "pretreat": "Dark",
-            "whiteInk": "Yes"
-          }
-        ]
+        "size": "M",
+        "qty": 3,
+        "backendProductInfo": "DTF",
+        "vendorSku": "G500-BLK-M",
+        "artworkFile": "DTF-BACK-001.png",
+        "printer": "DTF Queue"
       }
     ]
   }

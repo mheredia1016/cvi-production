@@ -1,0 +1,126 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Label Center</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"><link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/backend.html" class="">🧠 Backend Control</a><a href="/label-center.html" class="active">🏷️ Label Center</a><a href="/garments.html" class="">👕 Garment Report</a></aside><main class="main">
+<div class="topbar no-print"><div><h1>Manager Label Center</h1><p>Rush first on red stock, then regular labels filtered by Backend Product Info.</p></div></div>
+
+<section class="cards no-print" id="summaryCards"></section>
+
+<section class="card no-print">
+  <div class="filter-row">
+    <label>Production Date<input type="date" id="dateFilter"></label>
+    <label>Label Group
+      <select id="groupFilter">
+        <option value="rush">Rush — Skip The Line</option>
+        <option value="regular">Regular Product Types</option>
+      </select>
+    </label>
+    <label>Product Type
+      <select id="typeFilter"></select>
+    </label>
+    <label>Printed Status
+      <select id="printedFilter">
+        <option value="unprinted">Unprinted only</option>
+        <option value="all">All labels</option>
+      </select>
+    </label>
+    <button onclick="loadLabels()">Load Labels</button>
+    <button onclick="printCurrent()">Print Current Group</button>
+    <button class="secondary" onclick="markPrinted()">Mark Current Labels Printed</button>
+  </div>
+  <div id="msg"></div>
+</section>
+
+<section class="card">
+  <div class="card-title"><h2 id="labelTitle">Labels</h2></div>
+  <div id="labels" class="label-sheet"><div class="empty">Import orders first.</div></div>
+</section>
+
+<script>
+let currentPieces=[];
+const types=[
+"White Ink, Back","DTG Light, Back","White Ink","DTG Light","EPT",
+"Embroidery To Order","Embroidery","Poster/Sticker","Sublimation","Pre-Stock","DTF"
+];
+
+function yesterday(){
+ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10);
+}
+
+dateFilter.value=yesterday();
+typeFilter.innerHTML=types.map(t=>`<option value="${t}">${t}</option>`).join('');
+
+groupFilter.addEventListener('change',()=>{
+ typeFilter.disabled=groupFilter.value==='rush';
+ loadLabels();
+});
+
+function params(){
+ const p=new URLSearchParams();
+ p.set('date',dateFilter.value);
+ if(groupFilter.value==='rush'){
+   p.set('rush','true');
+ }else{
+   p.set('rush','false');
+   p.set('category',typeFilter.value);
+ }
+ if(printedFilter.value==='unprinted') p.set('unprinted','true');
+ return p.toString();
+}
+
+async function loadSummary(){
+ const d=await (await fetch('/api/label-summary?date='+encodeURIComponent(dateFilter.value))).json();
+ summaryCards.innerHTML=
+  `<div class="metric"><span class="muted">Rush Labels</span><br><b>${d.rush}</b></div>`+
+  `<div class="metric"><span class="muted">Regular Labels</span><br><b>${d.regular}</b></div>`+
+  `<div class="metric"><span class="muted">Total Labels</span><br><b>${d.total}</b></div>`+
+  d.byType.map(x=>`<div class="metric"><span class="muted">${x.type}</span><br><b>${x.unprinted}</b><div class="muted">unprinted</div></div>`).join('');
+}
+
+function labelHtml(p){
+ const rush=p.rush;
+ return `<div class="thermal-label ${rush?'rush-stock':''}">
+   <div class="label-top">
+     <span>${rush?'RUSH — SKIP THE LINE':p.orderNumber}</span>
+     <span>${rush?p.orderNumber:p.store}</span>
+   </div>
+   <div class="label-middle">
+     <div>
+       <div class="barcode">*${p.pieceId}*</div>
+       <div class="piece-id">${p.pieceId}</div>
+     </div>
+     <div class="type-block">${p.backendProductInfo}<br>${p.unitNumber} OF ${p.unitCount}</div>
+   </div>
+   <div class="label-bottom">
+     <div>${p.vendorSku}<br>${p.color} ${p.size}</div>
+     <div class="right">${p.sku}<br><span class="label-note">${p.printer}</span></div>
+   </div>
+ </div>`;
+}
+
+async function loadLabels(){
+ const rows=await (await fetch('/api/pieces?'+params())).json();
+ currentPieces=rows;
+ labelTitle.textContent=groupFilter.value==='rush'?'Rush Labels — RED STOCK':typeFilter.value+' — WHITE STOCK';
+ labels.innerHTML=rows.length?rows.map(labelHtml).join(''):'<div class="empty">No matching labels.</div>';
+ loadSummary();
+}
+
+function printCurrent(){
+ if(!currentPieces.length){alert('No labels loaded.');return;}
+ window.print();
+}
+
+async function markPrinted(){
+ if(!currentPieces.length){alert('No labels loaded.');return;}
+ const labelStock=groupFilter.value==='rush'?'red':'white';
+ const category=groupFilter.value==='rush'?'Rush / Skip The Line':typeFilter.value;
+ const d=await (await fetch('/api/labels/mark-printed',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({pieceIds:currentPieces.map(p=>p.pieceId),labelStock,category})
+ })).json();
+ msg.innerHTML='<div class="success">✓ '+d.message+'</div>';
+ loadLabels();
+}
+
+loadLabels();
+</script>
+</main></div></body></html>
