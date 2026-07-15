@@ -1,15 +1,23 @@
 
-export function resolveArtwork(oldSku = "", requiresBack = false) {
-  const normalized = String(oldSku || "").trim();
+export function resolveArtwork(oldSku = "", mainSku = "", requiresBack = false) {
+  const normalizedOldSku = String(oldSku || "").trim();
+  const normalizedMainSku = String(mainSku || "").trim();
+
+  const artworkSku = normalizedOldSku || normalizedMainSku;
+  const artworkSource = normalizedOldSku
+    ? "Old SKU"
+    : (normalizedMainSku ? "Main SKU" : "");
 
   return {
+    artworkSku,
+    artworkSource,
     front: {
-      required: Boolean(normalized),
-      filename: normalized ? `${normalized}.png` : ""
+      required: Boolean(artworkSku),
+      filename: artworkSku ? `${artworkSku}.png` : ""
     },
     back: {
-      required: Boolean(normalized && requiresBack),
-      filename: normalized && requiresBack ? `${normalized} BACK.png` : ""
+      required: Boolean(artworkSku && requiresBack),
+      filename: artworkSku && requiresBack ? `${artworkSku} BACK.png` : ""
     }
   };
 }

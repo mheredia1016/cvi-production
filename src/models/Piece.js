@@ -13,11 +13,16 @@ export function createPiece(data) {
     unitCount: data.unitCount,
     sku: data.sku,
     oldSku: data.oldSku,
+    mainSku: data.mainSku,
+    artworkSku: data.artworkSku,
+    artworkSource: data.artworkSource,
     title: data.title,
     backendProductInfo: data.backendProductInfo,
     process: data.process,
     requiresFront: data.requiresFront,
     requiresBack: data.requiresBack,
+    printerInstructions: data.printerInstructions || [],
+    unknownModifiers: data.unknownModifiers || [],
     frontArtwork: data.frontArtwork,
     backArtwork: data.backArtwork,
     garment: data.garment,
@@ -28,6 +33,6 @@ export function createPiece(data) {
     status: "waiting",
     labelPrinted: false,
     labelPrintedAt: null,
-    labelStock: null
+    labelStock: data.rush ? "red" : "white"
   };
 }

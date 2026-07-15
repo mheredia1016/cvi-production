@@ -27,15 +27,16 @@
         {
           "orderItemId": 11,
           "sku": "7368984-4",
-          "oldSku": "aew1112",
+          "oldSku": "",
           "name": "Basic Unisex Heavy Cotton T-Shirt",
           "quantity": 2,
-          "backendProductInfo": "DTF,Back",
+          "backendProductInfo": "White Ink, Uncheck Black",
           "garment": "Basic Unisex Heavy Cotton T-Shirt",
           "color": "Black",
           "size": "X-Large",
           "vendorSku": "G500-BLK-XL",
-          "style": "Basic Unisex Heavy Cotton T-Shirt"
+          "style": "Basic Unisex Heavy Cotton T-Shirt",
+          "mainSku": "tftcc1005"
         }
       ]
     },
@@ -57,7 +58,8 @@
           "color": "Black",
           "size": "Large",
           "vendorSku": "G500-BLK-L",
-          "style": "Gildan 5000"
+          "style": "Gildan 5000",
+          "mainSku": "mh3001"
         }
       ]
     },
@@ -79,7 +81,8 @@
           "color": "Full Color",
           "size": "18x24",
           "vendorSku": "POSTER-18X24",
-          "style": "Poster"
+          "style": "Poster",
+          "mainSku": "poster01"
         }
       ]
     }

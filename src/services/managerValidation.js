@@ -34,11 +34,11 @@ export function validateManagerDay(pieces) {
       ));
     }
 
-    if (!String(piece.oldSku || "").trim()) {
+    if (!String(piece.artworkSku || "").trim()) {
       warnings.push(warning(
-        "missing_old_sku",
+        "missing_artwork_sku",
         piece,
-        "Old SKU is missing, so artwork filenames cannot be resolved."
+        "Both Old SKU and Main SKU are missing, so artwork filenames cannot be resolved."
       ));
     }
 
@@ -52,6 +52,14 @@ export function validateManagerDay(pieces) {
 
     if (!String(piece.size || "").trim()) {
       warnings.push(warning("missing_size", piece, "Size is missing."));
+    }
+
+    if ((piece.unknownModifiers || []).length > 0) {
+      warnings.push(warning(
+        "unknown_backend_modifier",
+        piece,
+        `Unknown Backend Product Info modifier(s): ${(piece.unknownModifiers || []).join(", ")}`
+      ));
     }
 
     if (!String(piece.garment || "").trim()) {

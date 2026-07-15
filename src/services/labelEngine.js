@@ -9,7 +9,7 @@ export function createPiecesForOrder(order, storeName) {
 
   for (const item of order.items) {
     const parsed = parseBackendProductInfo(item.backendProductInfo);
-    const artwork = resolveArtwork(item.oldSku, parsed.requiresBack);
+    const artwork = resolveArtwork(item.oldSku, item.mainSku, parsed.requiresBack);
 
     for (let unit = 1; unit <= Number(item.quantity || 0); unit += 1) {
       pieces.push(createPiece({
@@ -25,11 +25,16 @@ export function createPiecesForOrder(order, storeName) {
         unitCount: item.quantity,
         sku: item.sku,
         oldSku: item.oldSku,
+        mainSku: item.mainSku,
+        artworkSku: artwork.artworkSku,
+        artworkSource: artwork.artworkSource,
         title: item.name,
         backendProductInfo: item.backendProductInfo,
         process: parsed.process,
         requiresFront: parsed.requiresFront,
         requiresBack: parsed.requiresBack,
+        printerInstructions: parsed.printerInstructions,
+        unknownModifiers: parsed.unknownModifiers,
         frontArtwork: artwork.front.filename,
         backArtwork: artwork.back.filename,
         garment: item.garment,

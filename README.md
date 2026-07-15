@@ -48,3 +48,18 @@ SHIPSTATION_WRITE_ENABLED=false
 - Manager review timestamp for the S&S draft
 - Submit endpoint intentionally disabled in test mode
 - No order is sent to S&S
+
+
+## v6.5 additions
+
+- Artwork SKU resolution: Old SKU first, then Main SKU
+- ShipStation variant SKU is never used for artwork filenames
+- Front art: `<artworkSku>.png`
+- Back art: `<artworkSku> BACK.png`
+- Backend Product Info parser recognizes:
+  - `Back` as an additional back-print requirement
+  - `Uncheck Black` as a printer instruction
+- `Uncheck Black` prints prominently on the 3x1 label
+- Red label stock is used only for Skip The Line orders
+- White label stock is used for all non-rush labels
+- Manager artwork and printer-instruction inspector

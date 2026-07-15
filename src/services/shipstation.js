@@ -160,6 +160,7 @@ export async function getSourceOrders(options = {}) {
         orderItemId: item.orderItemId,
         sku: item.sku || "",
         oldSku: option(item, "Old SKU"),
+      mainSku: option(item, "Main SKU"),
         name: item.name || "",
         quantity: Number(item.quantity || 1),
         backendProductInfo: option(item, "Backend Product Info"),

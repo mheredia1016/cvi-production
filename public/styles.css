@@ -2,3 +2,12 @@
 .warning-badge{display:inline-block;background:#7c2d12;color:#fff;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700}
 
 .danger{background:#991b1b!important}
+
+.instruction{
+  text-align:center;
+  font-size:9px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:.4px;
+  margin-top:1px;
+}

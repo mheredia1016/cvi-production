@@ -23,6 +23,10 @@
 </section>
 <section class="card no-print"><h2>Daily Label Queue</h2><div id="queue" class="queue"></div></section>
 <section class="card no-print"><h2>Order Preview</h2><div id="previewBox">Click Preview.</div></section>
+<section class="card no-print">
+  <h2>Artwork & Printer Instructions</h2>
+  <div id="productionInspector">Shadow import orders to inspect artwork mapping.</div>
+</section>
 <section class="card"><div id="labels"></div></section>
 <section class="card"><h2>Garment Report</h2><div id="garments">No data.</div></section>
 <section class="card no-print">
@@ -89,6 +93,31 @@ async function loadSettings(){
 
 function formatTime(value){
   return value ? new Date(value).toLocaleString() : 'Not complete';
+}
+
+
+async function loadProductionInspector(){
+  const pieces=await (await fetch('/api/manager/labels?date='+date.value)).json();
+
+  productionInspector.innerHTML=pieces.length
+    ? `<table>
+        <tr>
+          <th>Piece</th><th>Order</th><th>Process</th><th>Artwork SKU</th>
+          <th>Source</th><th>Front Art</th><th>Back Art</th><th>Printer Instruction</th><th>Label Stock</th>
+        </tr>
+        ${pieces.map(piece=>`<tr>
+          <td>${escapeHtml(piece.pieceId)}</td>
+          <td>${escapeHtml(piece.orderNumber)}</td>
+          <td>${escapeHtml(piece.process)}${piece.requiresBack?' + Back':''}</td>
+          <td>${escapeHtml(piece.artworkSku||'')}</td>
+          <td>${escapeHtml(piece.artworkSource||'')}</td>
+          <td>${escapeHtml(piece.frontArtwork||'')}</td>
+          <td>${escapeHtml(piece.backArtwork||'')}</td>
+          <td>${escapeHtml((piece.printerInstructions||[]).join(', '))}</td>
+          <td>${piece.rush?'RED':'WHITE'}</td>
+        </tr>`).join('')}
+      </table>`
+    : 'No imported pieces for this date.';
 }
 
 async function loadReview(){
@@ -211,15 +240,30 @@ function escapeHtml(value){
 }
 
 function thermalLabelHtml(piece){
+  const instruction=(piece.printerInstructions||[]).includes('Uncheck Black')
+    ? '<div class="instruction">*** UNCHECK BLACK ***</div>'
+    : '';
+
+  const processText=piece.requiresBack
+    ? `${escapeHtml(piece.process || piece.backendProductInfo)}, BACK`
+    : escapeHtml(piece.process || piece.backendProductInfo);
+
   return `<div class="thermal">
-    <div class="top"><span>${piece.rush?'RUSH — SKIP THE LINE':escapeHtml(piece.orderNumber)}</span><span>${escapeHtml(piece.orderNumber)}</span></div>
-    <div class="middle">
-      <div><div class="barcode">*${escapeHtml(piece.pieceId)}*</div><div class="piece">${escapeHtml(piece.pieceId)}</div></div>
-      <div class="type">${escapeHtml(piece.backendProductInfo)}<br>${piece.unitNumber} OF ${piece.unitCount}</div>
+    <div class="top">
+      <span>${piece.rush?'RUSH — SKIP THE LINE':escapeHtml(piece.orderNumber)}</span>
+      <span>${escapeHtml(piece.orderNumber)}</span>
     </div>
+    <div class="middle">
+      <div>
+        <div class="barcode">*${escapeHtml(piece.pieceId)}*</div>
+        <div class="piece">${escapeHtml(piece.pieceId)}</div>
+      </div>
+      <div class="type">${processText}<br>${piece.unitNumber} OF ${piece.unitCount}</div>
+    </div>
+    ${instruction}
     <div class="bottom">
-      <span>${escapeHtml(piece.style || piece.garment)} • ${escapeHtml(piece.color)} • ${escapeHtml(piece.size)}</span>
-      <span>${escapeHtml(piece.oldSku)}${piece.requiresBack?' / BACK':''}</span>
+      <span>${escapeHtml(piece.style || piece.garment)} ${escapeHtml(piece.color)} ${escapeHtml(piece.size)}</span>
+      <span>${escapeHtml(piece.artworkSku || '')}</span>
     </div>
   </div>`;
 }
@@ -460,7 +504,7 @@ async function submitSsDraft(){
 
 async function loadAll(){
   await loadSettings();
-  await Promise.all([loadSummary(),loadGarments(),loadReview(),loadSsDraft()]);
+  await Promise.all([loadSummary(),loadGarments(),loadReview(),loadSsDraft(),loadProductionInspector()]);
 }
 
 preview();
