@@ -1,6 +1,6 @@
 {
-  "name": "productionos-shipstation-shadow-v4",
-  "version": "4.0.0",
+  "name": "productionos-manager-daily-v5",
+  "version": "5.0.0",
   "type": "module",
   "scripts": {
     "start": "node server.js"

@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Daily Manager</title><link rel="stylesheet" href="/styles.css"><link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/daily.html" class="active">📋 Daily Manager</a><a href="/stores.html" class="">🏪 Stores</a><a href="/history.html" class="">🖨️ Print History</a></aside><main class="main"><div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
+<h1>Manager Daily Tasks</h1>
+<section class="card no-print">
+<div class="row">
+<label>Production Date<input type="date" id="date"></label>
+<button onclick="preview()">1. Preview In Production</button>
+<button onclick="doImport()">2. Shadow Import</button>
+<button class="secondary" onclick="loadAll()">Refresh</button>
+<button class="secondary" onclick="loadGarments()">Print Garment Report</button>
+</div><div id="msg"></div>
+</section>
+<section class="cards" id="metrics"></section>
+<section class="card no-print"><h2>Daily Label Queue</h2><div id="queue" class="queue"></div></section>
+<section class="card no-print"><h2>Preview</h2><div id="previewBox">Click Preview.</div></section>
+<section class="card"><div id="labels"></div></section>
+<section class="card"><h2>Garment Report</h2><div id="garments">No data.</div></section>
+<script>
+const TYPES=["White Ink, Back","DTG Light, Back","White Ink","DTG Light","EPT","Embroidery To Order","Embroidery","Poster/Sticker","Sublimation","Pre-Stock","DTF"];
+let current=[],currentCategory='',currentStock='white';
+function yesterday(){const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)}
+date.value=yesterday();
+async function preview(){
+ const r=await fetch('/api/manager/preview?date='+date.value);const d=await r.json();
+ if(!r.ok){previewBox.innerHTML='<div class=error>'+d.error+'</div>';return;}
+ previewBox.innerHTML=`<p><b>${d.included.length}</b> included, <b>${d.excluded.length}</b> excluded.</p><table><tr><th>Order</th><th>Store</th><th>Rush</th><th>Product Types</th></tr>${d.included.map(o=>`<tr><td>${o.orderNumber}</td><td>${o.storeName}</td><td>${o.customField1||''}</td><td>${o.items.map(i=>i.backendProductInfo).join(', ')}</td></tr>`).join('')}</table>`;
+}
+async function doImport(){
+ const r=await fetch('/api/manager/shadow-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:date.value})});const d=await r.json();
+ msg.innerHTML=r.ok?'<div class=success>✓ '+d.message+'</div>':'<div class=error>'+d.error+'</div>';loadAll();
+}
+async function loadAll(){await Promise.all([loadSummary(),loadQueue(),loadGarments()])}
+async function loadSummary(){
+ const d=await (await fetch('/api/manager/summary?date='+date.value)).json();
+ metrics.innerHTML=[['Total Labels',d.total],['Rush',d.rush],['Regular',d.regular],['Unprinted',d.unprinted]].map(x=>`<div class=metric><span class=muted>${x[0]}</span><br><b>${x[1]}</b></div>`).join('');
+}
+async function loadQueue(){
+ const d=await (await fetch('/api/manager/summary?date='+date.value)).json();
+ const cards=[{type:'Rush / Skip The Line',count:d.rush,rush:true},...d.byType.map(x=>({type:x.type,count:x.unprinted,rush:false}))];
+ queue.innerHTML=cards.map(c=>`<div class="queue-card ${c.count===0?'done':''}"><b>${c.type}</b><p>${c.count} unprinted</p><button ${c.count===0?'disabled':''} onclick='openGroup(${JSON.stringify(c.type)},${c.rush})'>Open</button></div>`).join('');
+}
+async function openGroup(type,isRush){
+ currentCategory=type;currentStock=isRush?'red':'white';
+ let url='/api/manager/labels?date='+date.value+'&unprinted=true&rush='+(isRush?'true':'false');
+ if(!isRush)url+='&type='+encodeURIComponent(type);
+ current=await (await fetch(url)).json();
+ labels.innerHTML=`<div class=no-print><h2>${type}</h2><p>${current.length} labels • ${currentStock.toUpperCase()} stock</p><button onclick="window.print()">Print</button><button class=secondary onclick="markPrinted()">Mark Printed</button></div>`+
+ current.map(p=>`<div class=thermal><div class=top><span>${p.rush?'RUSH — SKIP THE LINE':p.orderNumber}</span><span>${p.orderNumber}</span></div><div class=middle><div><div class=barcode>*${p.pieceId}*</div><div class=piece>${p.pieceId}</div></div><div class=type>${p.backendProductInfo}<br>${p.unitNumber} OF ${p.unitCount}</div></div><div class=bottom><span>${p.vendorSku} ${p.color} ${p.size}</span><span>${p.oldSku}</span></div></div>`).join('');
+}
+async function markPrinted(){
+ const d=await (await fetch('/api/manager/mark-printed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pieceIds:current.map(p=>p.pieceId),category:currentCategory,labelStock:currentStock})})).json();
+ msg.innerHTML='<div class=success>✓ '+d.message+'</div>';labels.innerHTML='';loadAll();
+}
+async function loadGarments(){
+ const rows=await (await fetch('/api/manager/garments?date='+date.value)).json();
+ garments.innerHTML=rows.length?'<table><tr><th>Vendor SKU</th><th>Garment</th><th>Color</th><th>Size</th><th>Qty</th></tr>'+rows.map(r=>`<tr><td>${r.vendorSku}</td><td>${r.garment}</td><td>${r.color}</td><td>${r.size}</td><td><b>${r.qty}</b></td></tr>`).join('')+'</table>':'No garment data.';
+}
+preview();loadAll();
+</script>
+</main></div></body></html>

@@ -1,29 +1,25 @@
-# ProductionOS ShipStation Shadow v4
+# ProductionOS Manager Daily v5
 
-Real ShipStation V1 read-only integration with store selection.
+This sample focuses only on manager daily tasks.
 
-## Railway variables
+## Daily flow
 
-```text
-SHIPSTATION_API_KEY=...
-SHIPSTATION_API_SECRET=...
-SHIPSTATION_READY_TAG=Ready For Production
-SHIPSTATION_ORDER_STATUS=awaiting_shipment
-SHIPSTATION_WRITE_ENABLED=false
-USE_MOCK_DATA=false
-SHIPSTATION_ENABLED_STORE_IDS=101,102,103
+1. Select production date.
+2. Preview ShipStation orders tagged `In Production` from enabled stores.
+3. Shadow import them without changing ShipStation.
+4. Review garment report.
+5. Print Rush labels first on red 3x1 stock.
+6. Print regular label queues by Backend Product Info.
+7. Mark each group printed.
+8. Review label print history.
+
+## Test locally
+
+```bash
+npm install
+npm start
 ```
 
-Do not commit credentials to GitHub.
+Open `/daily.html`.
 
-## Flow
-
-1. `/stores.html` loads ShipStation stores.
-2. Enable only the stores ProductionOS should use.
-3. Put those numeric IDs into `SHIPSTATION_ENABLED_STORE_IDS` in Railway for persistent configuration.
-4. `/backend.html` previews Ready For Production orders.
-5. Included and excluded orders are shown separately.
-6. Shadow Import creates internal test pieces only.
-7. No ShipStation tags or orders are changed.
-
-This version intentionally does not contain tag write calls.
+Use `USE_MOCK_DATA=true` for the included sample.

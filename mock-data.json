@@ -2,115 +2,123 @@
   "stores": [
     {
       "storeId": 101,
-      "storeName": "Pro Wrestling Tees",
-      "marketplaceName": "Custom Store",
-      "active": true
+      "storeName": "Merch Heroes",
+      "marketplaceName": "Shopify"
     },
     {
       "storeId": 102,
       "storeName": "ShopAEW",
-      "marketplaceName": "Shopify",
-      "active": true
+      "marketplaceName": "Shopify"
     },
     {
       "storeId": 103,
-      "storeName": "Merch Heroes",
-      "marketplaceName": "Shopify",
-      "active": true
-    },
-    {
-      "storeId": 104,
-      "storeName": "Test Store",
-      "marketplaceName": "Custom Store",
-      "active": true
+      "storeName": "Pro Wrestling Tees",
+      "marketplaceName": "Magento"
     }
   ],
   "orders": [
     {
-      "orderId": 9001,
-      "orderNumber": "AEW165074",
-      "storeId": 102,
-      "orderDate": "2026-07-14",
-      "orderStatus": "awaiting_shipment",
-      "advancedOptions": {
-        "customField1": "Skip The Line"
-      },
-      "items": [
-        {
-          "orderItemId": 1,
-          "sku": "AEW5407",
-          "name": "Basic Unisex Heavy Cotton T-Shirt",
-          "quantity": 2,
-          "options": [
-            {
-              "name": "Backend Product Info",
-              "value": "White Ink, Back"
-            },
-            {
-              "name": "Color",
-              "value": "Black"
-            },
-            {
-              "name": "Size",
-              "value": "Large"
-            },
-            {
-              "name": "Type of Garment",
-              "value": "G500"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "orderId": 9002,
-      "orderNumber": "PWT581003",
+      "orderId": 1,
+      "orderNumber": "MH2001",
       "storeId": 101,
       "orderDate": "2026-07-14",
-      "orderStatus": "awaiting_shipment",
-      "advancedOptions": {
-        "customField1": ""
-      },
+      "customField1": "Skip The Line",
       "items": [
         {
-          "orderItemId": 2,
-          "sku": "POSTER-18X24-001",
-          "name": "18x24 Poster",
-          "quantity": 1,
-          "options": [
-            {
-              "name": "Backend Product Info",
-              "value": "Poster/Sticker"
-            },
-            {
-              "name": "Size",
-              "value": "18x24"
-            }
-          ]
+          "orderItemId": 11,
+          "sku": "7368984-4",
+          "oldSku": "aew1112",
+          "name": "Heavy Cotton Tee",
+          "quantity": 2,
+          "backendProductInfo": "DTF,Back",
+          "garment": "Basic Unisex Heavy Cotton T-Shirt",
+          "color": "Black",
+          "size": "X-Large",
+          "vendorSku": "G500-BLK-XL"
         }
       ]
     },
     {
-      "orderId": 9003,
-      "orderNumber": "TEST100",
-      "storeId": 104,
+      "orderId": 2,
+      "orderNumber": "MH2002",
+      "storeId": 101,
       "orderDate": "2026-07-14",
-      "orderStatus": "awaiting_shipment",
-      "advancedOptions": {
-        "customField1": ""
-      },
+      "customField1": "",
       "items": [
         {
-          "orderItemId": 3,
-          "sku": "TEST-SKU",
-          "name": "Test Product",
+          "orderItemId": 21,
+          "sku": "MH3001",
+          "oldSku": "mh3001",
+          "name": "White Ink Tee",
+          "quantity": 3,
+          "backendProductInfo": "White Ink",
+          "garment": "Gildan 5000",
+          "color": "Black",
+          "size": "Large",
+          "vendorSku": "G500-BLK-L"
+        }
+      ]
+    },
+    {
+      "orderId": 3,
+      "orderNumber": "MH2003",
+      "storeId": 101,
+      "orderDate": "2026-07-14",
+      "customField1": "",
+      "items": [
+        {
+          "orderItemId": 31,
+          "sku": "POSTER-01",
+          "oldSku": "poster01",
+          "name": "18x24 Poster",
           "quantity": 1,
-          "options": [
-            {
-              "name": "Backend Product Info",
-              "value": "DTF"
-            }
-          ]
+          "backendProductInfo": "Poster/Sticker",
+          "garment": "Poster",
+          "color": "Full Color",
+          "size": "18x24",
+          "vendorSku": "POSTER-18X24"
+        }
+      ]
+    },
+    {
+      "orderId": 4,
+      "orderNumber": "AEW3001",
+      "storeId": 102,
+      "orderDate": "2026-07-14",
+      "customField1": "",
+      "items": [
+        {
+          "orderItemId": 41,
+          "sku": "AEW7001",
+          "oldSku": "aew7001",
+          "name": "Light Tee",
+          "quantity": 2,
+          "backendProductInfo": "DTG Light,Back",
+          "garment": "Soft Style Tee",
+          "color": "White",
+          "size": "Medium",
+          "vendorSku": "SS300-WHT-M"
+        }
+      ]
+    },
+    {
+      "orderId": 5,
+      "orderNumber": "PWT4001",
+      "storeId": 103,
+      "orderDate": "2026-07-14",
+      "customField1": "",
+      "items": [
+        {
+          "orderItemId": 51,
+          "sku": "EMB001",
+          "oldSku": "emb001",
+          "name": "Embroidered Hat",
+          "quantity": 1,
+          "backendProductInfo": "Embroidery To Order",
+          "garment": "Snapback Hat",
+          "color": "Black",
+          "size": "OS",
+          "vendorSku": "HAT-BLK-OS"
         }
       ]
     }
