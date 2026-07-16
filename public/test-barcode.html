@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Beyond Wednesdays Test Barcode</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">ProductionOS</div>
+    <a href="/daily.html">📋 Daily Manager</a>
+    <a href="/stores.html">🏪 Stores</a>
+    <a href="/settings.html">⚙️ Settings</a>
+    <a href="/test-barcode.html" class="active">🏷️ Test Barcode</a>
+    <a href="/printer-test.html">🖨️ Printer Scan Test</a>
+    <a href="/history.html">🖨️ Print History</a>
+  </aside>
+
+  <main class="main">
+    <div class="shadow">TEST PIECE ONLY — This does not come from ShipStation.</div>
+    <h1>Beyond Wednesdays Front + Back Test</h1>
+
+    <section class="card no-print">
+      <p>This creates one temporary Merch Heroes test piece with:</p>
+      <pre>beyondwednesdays1002.png
+beyondwednesdays1002 BACK.png</pre>
+      <button onclick="createTestPiece()">Create Test Piece</button>
+      <button onclick="printLabel()">Print 3×1 Test Barcode</button>
+      <a class="button secondary" href="/printer-test.html">Open Printer Scan Test</a>
+      <div id="message"></div>
+    </section>
+
+    <section class="card">
+      <div id="labelContainer">
+        <div class="test-label">
+          <div class="test-top">
+            <span>TEST-BW1002</span>
+            <span>MERCH HEROES</span>
+          </div>
+          <div class="test-middle">
+            <div>
+              <div class="test-barcode">*99990001*</div>
+              <div class="test-piece">99990001</div>
+            </div>
+            <div class="test-type">DTF, BACK<br>1 OF 1</div>
+          </div>
+          <div class="test-bottom">
+            <span>TEST GARMENT BLACK L</span>
+            <span>beyondwednesdays1002</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card no-print">
+      <h2>Test steps</h2>
+      <ol>
+        <li>Click <b>Create Test Piece</b>.</li>
+        <li>Print the barcode label or type <b>99990001</b>.</li>
+        <li>Open Printer Scan Test.</li>
+        <li>Scan the barcode.</li>
+        <li>Click Search Z: Artwork.</li>
+        <li>Confirm front and back previews appear.</li>
+        <li>Send each side to the test hot folder.</li>
+      </ol>
+    </section>
+  </main>
+</div>
+
+<script>
+function escapeHtml(value){
+  return String(value??'')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+}
+
+async function createTestPiece(){
+  const response=await fetch('/api/printer/test-piece/beyondwednesdays1002',{
+    method:'POST'
+  });
+  const data=await response.json();
+
+  message.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+' Scan piece 99990001.</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+}
+
+function printLabel(){
+  const popup=window.open('','_blank','width=550,height=350');
+
+  popup.document.write(`<!doctype html>
+  <html>
+  <head>
+    <title>Test Barcode 99990001</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+    <style>
+      @page{size:3in 1in;margin:0}
+      html,body{margin:0;padding:0;background:#fff}
+      .label{
+        width:3in;height:1in;padding:.05in .07in;
+        color:#000;background:#fff;overflow:hidden;
+        font-family:Arial,sans-serif;
+      }
+      .top{display:flex;justify-content:space-between;font-size:10px;font-weight:900}
+      .middle{display:flex;justify-content:space-between;align-items:center}
+      .barcode{font-family:'Libre Barcode 39',monospace;font-size:34px;line-height:.72}
+      .piece{font-size:11px;font-weight:900;letter-spacing:1px}
+      .type{text-align:right;font-size:10px;font-weight:900}
+      .bottom{display:flex;justify-content:space-between;font-size:8px;font-weight:700}
+    </style>
+  </head>
+  <body>
+    <div class="label">
+      <div class="top"><span>TEST-BW1002</span><span>MERCH HEROES</span></div>
+      <div class="middle">
+        <div><div class="barcode">*99990001*</div><div class="piece">99990001</div></div>
+        <div class="type">DTF, BACK<br>1 OF 1</div>
+      </div>
+      <div class="bottom">
+        <span>TEST GARMENT BLACK L</span>
+        <span>beyondwednesdays1002</span>
+      </div>
+    </div>
+  </body>
+  </html>`);
+
+  popup.document.close();
+  setTimeout(()=>popup.print(),500);
+}
+</script>
+</body>
+</html>

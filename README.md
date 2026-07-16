@@ -190,3 +190,50 @@ Restart the local agent after updating:
 ```cmd
 npm.cmd run agent
 ```
+
+
+## v6.9.1 Beyond Wednesdays test barcode
+
+Open:
+
+```text
+/test-barcode.html
+```
+
+Click **Create Test Piece** to add temporary piece:
+
+```text
+99990001
+```
+
+It maps to:
+
+```text
+Front: beyondwednesdays1002.png
+Back: beyondwednesdays1002 BACK.png
+Process: DTF
+Requires Back: Yes
+Store: Merch Heroes
+```
+
+Print the 3x1 barcode or enter `99990001` on `/printer-test.html`.
+
+
+## v7.0 Brother Print Engine v1 — Dry Run
+
+Creates local packages in `C:\ProductionOS\DryRunJobs` with front/back PNGs, GTOPTION XML, GTDATA Info XML, and a JSON manifest.
+
+It does not generate ARX, contact a printer, call SendARX, or call StartPrint.
+
+Add locally:
+
+```text
+PRINT_DRY_RUN_ROOT=C:\ProductionOS\DryRunJobs
+PRINT_ENGINE_POLL_MS=2000
+```
+
+Restart:
+
+```cmd
+npm.cmd run agent
+```

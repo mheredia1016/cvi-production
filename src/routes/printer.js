@@ -292,3 +292,190 @@ printerRouter.post("/agent/graphics-jobs/:jobId/complete", (req, res) => {
 
   res.json({ success: true });
 });
+
+
+printerRouter.post("/test-piece/beyondwednesdays1002", (req, res) => {
+  const existing = runtimeStore.pieces.find(
+    (piece) => piece.pieceId === "99990001"
+  );
+
+  if (existing) {
+    return res.json({
+      success: true,
+      message: "Test piece already exists.",
+      piece: existing
+    });
+  }
+
+  const piece = {
+    pieceId: "99990001",
+    orderId: "TEST-BW-1002",
+    orderNumber: "TEST-BW1002",
+    orderDate: new Date().toISOString().slice(0, 10),
+    storeId: 0,
+    storeName: "Merch Heroes",
+    rush: false,
+    customField2: "",
+    unitNumber: 1,
+    unitCount: 1,
+    sku: "beyondwednesdays1002",
+    oldSku: "",
+    mainSku: "beyondwednesdays1002",
+    artworkSku: "beyondwednesdays1002",
+    artworkSource: "Main SKU",
+    title: "Beyond Wednesdays Artwork Test",
+    style: "Test Garment",
+    backendProductInfo: "DTF,Back",
+    process: "DTF",
+    requiresFront: true,
+    requiresBack: true,
+    printerInstructions: [],
+    unknownModifiers: [],
+    frontArtwork: "beyondwednesdays1002.png",
+    backArtwork: "beyondwednesdays1002 BACK.png",
+    garment: "Test Garment",
+    color: "Black",
+    size: "Large",
+    vendorSku: "TEST-BW1002",
+    status: "waiting",
+    labelPrinted: false,
+    labelPrintedAt: null,
+    labelStock: "white"
+  };
+
+  runtimeStore.pieces.push(piece);
+
+  res.json({
+    success: true,
+    message: "Created test piece 99990001.",
+    piece
+  });
+});
+
+
+function latestArtworkLookup(pieceId) {
+  return [...runtimeStore.artworkLookups]
+    .reverse()
+    .find((entry) => entry.pieceId === pieceId && entry.status === "complete");
+}
+
+function defaultBrotherSettings(piece) {
+  return {
+    platenSize: "14x16",
+    platenSizeCode: 2,
+    resolutionCode: 1,
+    inkCode: 2,
+    inkVolumeOption: 3,
+    highlight: 5,
+    mask: 4,
+    copies: 1,
+    doublePrint: 0,
+    materialBlack: false,
+    minWhite: 1,
+    saturation: 10,
+    brightness: 10,
+    contrast: 10,
+    choke: 3,
+    ecoMode: false,
+    fastMode: false,
+    uncheckBlack: (piece.printerInstructions || []).includes("Uncheck Black")
+  };
+}
+
+printerRouter.get("/piece/:pieceId/dry-run-settings", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  res.json({
+    pieceId: piece.pieceId,
+    settings: defaultBrotherSettings(piece),
+    warning: "Dry-run only. Values are based on sample Brother XML and must be confirmed before direct printing."
+  });
+});
+
+printerRouter.post("/piece/:pieceId/build-dry-run", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  const lookup = latestArtworkLookup(piece.pieceId);
+  if (!lookup) return res.status(400).json({ error: "Complete artwork lookup first." });
+  if (!lookup.front?.found || !lookup.front?.path) return res.status(400).json({ error: "Front artwork was not found." });
+  if (piece.requiresBack && (!lookup.back?.found || !lookup.back?.path)) {
+    return res.status(400).json({ error: "Back artwork is required but was not found." });
+  }
+
+  const requested = req.body?.settings || {};
+  const defaults = defaultBrotherSettings(piece);
+  const settings = {
+    ...defaults,
+    platenSize: String(requested.platenSize || defaults.platenSize),
+    platenSizeCode: Number(requested.platenSizeCode ?? defaults.platenSizeCode),
+    resolutionCode: Number(requested.resolutionCode ?? defaults.resolutionCode),
+    inkCode: Number(requested.inkCode ?? defaults.inkCode),
+    inkVolumeOption: Number(requested.inkVolumeOption ?? defaults.inkVolumeOption),
+    highlight: Number(requested.highlight ?? defaults.highlight),
+    mask: Number(requested.mask ?? defaults.mask),
+    copies: Math.max(1, Number(requested.copies ?? defaults.copies)),
+    doublePrint: Number(requested.doublePrint ?? defaults.doublePrint),
+    materialBlack: Boolean(requested.materialBlack ?? defaults.materialBlack),
+    minWhite: Number(requested.minWhite ?? defaults.minWhite),
+    saturation: Number(requested.saturation ?? defaults.saturation),
+    brightness: Number(requested.brightness ?? defaults.brightness),
+    contrast: Number(requested.contrast ?? defaults.contrast),
+    choke: Number(requested.choke ?? defaults.choke),
+    ecoMode: Boolean(requested.ecoMode ?? defaults.ecoMode),
+    fastMode: Boolean(requested.fastMode ?? defaults.fastMode),
+    uncheckBlack: Boolean(requested.uncheckBlack ?? defaults.uncheckBlack)
+  };
+
+  const job = {
+    id: `DRYRUN-${Date.now()}-${piece.pieceId}`,
+    pieceId: piece.pieceId,
+    orderNumber: piece.orderNumber,
+    storeName: piece.storeName,
+    artworkSku: piece.artworkSku,
+    process: piece.process,
+    requiresBack: Boolean(piece.requiresBack),
+    printerInstructions: piece.printerInstructions || [],
+    settings,
+    front: { sourcePath: lookup.front.path, filename: lookup.front.filename },
+    back: piece.requiresBack ? { sourcePath: lookup.back.path, filename: lookup.back.filename } : null,
+    status: "queued",
+    queuedAt: new Date().toISOString(),
+    outputFolder: null,
+    files: null,
+    error: null
+  };
+
+  runtimeStore.dryRunPrintJobs.push(job);
+  res.json({ success: true, message: "Brother dry-run package queued.", job });
+});
+
+printerRouter.get("/piece/:pieceId/dry-run-status", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+  const job = [...runtimeStore.dryRunPrintJobs].reverse().find((entry) => entry.pieceId === piece.pieceId);
+  res.json({ job: job || null });
+});
+
+printerRouter.get("/agent/dry-run-jobs", (req, res) => {
+  if (req.query.token !== config.agentToken) return res.status(401).json({ error: "Unauthorized agent token." });
+  const jobs = runtimeStore.dryRunPrintJobs.filter((job) => job.status === "queued");
+  for (const job of jobs) {
+    job.status = "processing";
+    job.processingAt = new Date().toISOString();
+  }
+  res.json(jobs);
+});
+
+printerRouter.post("/agent/dry-run-jobs/:jobId/complete", (req, res) => {
+  if (req.query.token !== config.agentToken) return res.status(401).json({ error: "Unauthorized agent token." });
+  const job = runtimeStore.dryRunPrintJobs.find((entry) => entry.id === req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Dry-run job not found." });
+  job.status = req.body?.error ? "error" : "complete";
+  job.completedAt = new Date().toISOString();
+  job.outputFolder = req.body?.outputFolder || null;
+  job.files = req.body?.files || null;
+  job.error = req.body?.error || null;
+  res.json({ success: true });
+});

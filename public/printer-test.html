@@ -13,7 +13,7 @@
     <a href="/daily.html">📋 Daily Manager</a>
     <a href="/stores.html">🏪 Stores</a>
     <a href="/settings.html">⚙️ Settings</a>
-    <a href="/printer-test.html" class="active">🖨️ Printer Scan Test</a>
+    <a href="/test-barcode.html">🏷️ Test Barcode</a><a href="/printer-test.html" class="active">🖨️ Printer Scan Test</a>
     <a href="/history.html">🖨️ Print History</a>
   </aside>
 
@@ -41,6 +41,13 @@
       <div id="artworkPanel">No artwork lookup requested.</div>
     </section>
 
+    <section class="card">
+      <h2>Brother Print Engine — Dry Run</h2>
+      <p class="muted">Builds local artwork and XML files only. No ARX or printer command.</p>
+      <div id="dryRunSettings">Load a piece first.</div>
+      <div class="row"><button onclick="buildDryRun()">Build Dry-Run Job Package</button><button class="secondary" onclick="loadDryRunStatus()">Refresh Status</button></div>
+      <div id="dryRunStatus"></div>
+    </section>
     <section class="card">
       <h2>Piece Completion</h2>
       <div id="completionPanel">Load a piece first.</div>
@@ -114,6 +121,8 @@ async function loadPiece(){
   }
 
   await refreshGraphicsStatus();
+  await loadDryRunSettings();
+  await loadDryRunStatus();
   statusPoll=setInterval(refreshGraphicsStatus,1500);
 }
 
@@ -178,6 +187,8 @@ async function sendGraphics(side){
     : '<div class="error">'+escapeHtml(data.error)+'</div>';
 
   await refreshGraphicsStatus();
+  await loadDryRunSettings();
+  await loadDryRunStatus();
 }
 
 async function refreshGraphicsStatus(){
@@ -213,6 +224,56 @@ async function refreshGraphicsStatus(){
     <div class="${data.pieceComplete?'success':'muted'}" style="margin-top:14px;font-size:20px;font-weight:800">
       ${data.pieceComplete?'✓ PIECE COMPLETE':'Piece is not complete yet.'}
     </div>`;
+}
+
+
+async function loadDryRunSettings(){
+  if(!currentPiece)return;
+  const response=await fetch('/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/dry-run-settings');
+  const data=await response.json();
+  if(!response.ok){dryRunSettings.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';return;}
+  const s=data.settings;
+  dryRunSettings.innerHTML=`<p class="error">⚠ ${escapeHtml(data.warning)}</p><div class="settings-grid">
+    <label>Platen Size<input id="drPlaten" value="${escapeHtml(s.platenSize)}"></label>
+    <label>Platen Code<input id="drPlatenCode" type="number" value="${s.platenSizeCode}"></label>
+    <label>Resolution Code<input id="drResolution" type="number" value="${s.resolutionCode}"></label>
+    <label>Ink Code<input id="drInk" type="number" value="${s.inkCode}"></label>
+    <label>Ink Volume<input id="drInkVolume" type="number" value="${s.inkVolumeOption}"></label>
+    <label>Highlight<input id="drHighlight" type="number" value="${s.highlight}"></label>
+    <label>Mask<input id="drMask" type="number" value="${s.mask}"></label>
+    <label>Copies<input id="drCopies" type="number" min="1" value="${s.copies}"></label>
+    <label>Double Print<input id="drDouble" type="number" value="${s.doublePrint}"></label>
+    <label>Minimum White<input id="drMinWhite" type="number" value="${s.minWhite}"></label>
+    <label>Choke<input id="drChoke" type="number" value="${s.choke}"></label>
+    <label><input id="drMaterialBlack" type="checkbox" ${s.materialBlack?'checked':''}> Material Black</label>
+    <label><input id="drUncheckBlack" type="checkbox" ${s.uncheckBlack?'checked':''}> Uncheck Black</label>
+  </div>`;
+}
+function collectDryRunSettings(){return{
+  platenSize:drPlaten.value,platenSizeCode:Number(drPlatenCode.value),resolutionCode:Number(drResolution.value),
+  inkCode:Number(drInk.value),inkVolumeOption:Number(drInkVolume.value),highlight:Number(drHighlight.value),
+  mask:Number(drMask.value),copies:Number(drCopies.value),doublePrint:Number(drDouble.value),
+  minWhite:Number(drMinWhite.value),choke:Number(drChoke.value),materialBlack:drMaterialBlack.checked,
+  uncheckBlack:drUncheckBlack.checked
+};}
+async function buildDryRun(){
+  const response=await fetch('/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/build-dry-run',{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:collectDryRunSettings()})
+  });
+  const data=await response.json();
+  message.innerHTML=response.ok?'<div class="success">✓ '+escapeHtml(data.message)+'</div>':'<div class="error">'+escapeHtml(data.error)+'</div>';
+  await loadDryRunStatus();
+}
+async function loadDryRunStatus(){
+  if(!currentPiece)return;
+  const response=await fetch('/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/dry-run-status');
+  const data=await response.json();
+  const job=data.job;
+  dryRunStatus.innerHTML=!job?'<p>No dry-run job built.</p>':`<p><b>Status:</b> ${escapeHtml(job.status)}</p>
+    ${job.outputFolder?`<p><b>Output folder:</b><br><code>${escapeHtml(job.outputFolder)}</code></p>`:''}
+    ${job.files?.manifest?`<p><b>Manifest:</b><br><code>${escapeHtml(job.files.manifest)}</code></p>`:''}
+    ${job.error?`<div class="error">${escapeHtml(job.error)}</div>`:''}
+    <p class="muted">No ARX generated. No printer command executed.</p>`;
 }
 
 function artCard(title,result,required,side){

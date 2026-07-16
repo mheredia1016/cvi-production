@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v6-9-graphics-lab-test",
-  "version": "6.9.0",
+  "name": "productionos-v7-print-engine-dry-run",
+  "version": "7.0.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

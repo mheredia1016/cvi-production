@@ -8,6 +8,7 @@ export const runtimeStore = {
   purchaseDrafts: {},
   artworkLookups: [],
   graphicsJobs: [],
+  dryRunPrintJobs: [],
   pieceCounter: 14540600,
   settings: {
     printOrder: [
