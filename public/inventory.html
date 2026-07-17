@@ -1,0 +1,244 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Blank Inventory</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">ProductionOS</div>
+    <a href="/daily.html">📋 Daily Manager</a>
+    <a href="/inventory.html" class="active">📦 Blank Inventory</a>
+    <a href="/stores.html">🏪 Stores</a>
+    <a href="/settings.html">⚙️ Settings</a>
+    <a href="/test-barcode.html">🏷️ Test Barcode</a>
+    <a href="/printer-test.html">🖨️ Printer Scan Test</a>
+    <a href="/history.html">🖨️ Print History</a>
+  </aside>
+
+  <main class="main">
+    <div class="shadow">SHADOW MODE — S&S purchasing remains disabled.</div>
+    <h1>Blank Inventory</h1>
+
+    <section class="card">
+      <h2>Receive Blank Garments</h2>
+      <p class="muted">
+        Enter brand, style, color and size. When the mapped S&S catalog is synced,
+        ProductionOS will automatically attach the exact S&S SKU.
+      </p>
+
+      <div class="inventory-form-grid">
+        <label>Garment Name
+          <input id="garmentName" value="Basic Unisex Heavy Cotton T-Shirt">
+        </label>
+        <label>Brand
+          <input id="brand" value="Gildan">
+        </label>
+        <label>Style
+          <input id="style" value="5000">
+        </label>
+        <label>Color
+          <input id="color" value="Black">
+        </label>
+        <label>Size
+          <input id="size" value="XL">
+        </label>
+        <label>Quantity Received
+          <input id="quantity" type="number" min="1" value="1">
+        </label>
+        <label>Reference / PO
+          <input id="reference" placeholder="S&S order number">
+        </label>
+        <label>Note
+          <input id="note" placeholder="Initial count or receiving note">
+        </label>
+      </div>
+
+      <button onclick="receiveInventory()">Receive Inventory</button>
+      <div id="receiveMessage"></div>
+    </section>
+
+    <section class="card">
+      <div class="row between">
+        <div>
+          <h2>Current On-Hand Inventory</h2>
+          <p class="muted">Edit on hand, minimum level, or storage location and save that row.</p>
+        </div>
+        <input id="search" placeholder="Search style, color, size or SKU" oninput="renderInventory()">
+      </div>
+
+      <div id="inventorySummary"></div>
+      <div class="table-wrap">
+        <table id="inventoryTable">
+          <thead>
+            <tr>
+              <th>S&S SKU</th>
+              <th>Garment</th>
+              <th>Brand / Style</th>
+              <th>Color</th>
+              <th>Size</th>
+              <th>On Hand</th>
+              <th>Minimum</th>
+              <th>Location</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Inventory Transactions</h2>
+      <div class="table-wrap">
+        <table id="transactionsTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Blank</th>
+              <th>Change</th>
+              <th>Result</th>
+              <th>Reference</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+let inventory=[];
+let transactions=[];
+
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>"']/g,char=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  })[char]);
+}
+
+async function loadInventory(){
+  const response=await fetch('/api/inventory?limit=500');
+  const data=await response.json();
+  inventory=data.inventory||[];
+  transactions=data.transactions||[];
+  renderInventory();
+  renderTransactions();
+}
+
+function renderInventory(){
+  const query=search.value.trim().toLowerCase();
+  const rows=inventory.filter(item=>
+    !query ||
+    [item.supplierSku,item.garmentName,item.brand,item.style,item.color,item.size,item.location]
+      .join(' ').toLowerCase().includes(query)
+  );
+
+  const total=rows.reduce((sum,item)=>sum+Number(item.onHandQty||0),0);
+  const low=rows.filter(item=>Number(item.minimumQty||0)>0&&Number(item.onHandQty||0)<=Number(item.minimumQty||0)).length;
+
+  inventorySummary.innerHTML=`<div class="metrics">
+    <div class="metric"><span class="muted">Blank Variants</span><br><b>${rows.length}</b></div>
+    <div class="metric"><span class="muted">Total Pieces On Hand</span><br><b>${total}</b></div>
+    <div class="metric"><span class="muted">At / Below Minimum</span><br><b>${low}</b></div>
+  </div>`;
+
+  document.querySelector('#inventoryTable tbody').innerHTML=rows.length
+    ? rows.map(item=>`<tr data-key="${escapeHtml(item.key)}">
+      <td>${escapeHtml(item.supplierSku||'—')}</td>
+      <td>${escapeHtml(item.garmentName||'')}</td>
+      <td>${escapeHtml(item.brand)} ${escapeHtml(item.style)}</td>
+      <td>${escapeHtml(item.color)}</td>
+      <td>${escapeHtml(item.size)}</td>
+      <td><input class="inv-onhand" type="number" min="0" value="${Number(item.onHandQty||0)}" style="width:85px"></td>
+      <td><input class="inv-minimum" type="number" min="0" value="${Number(item.minimumQty||0)}" style="width:85px"></td>
+      <td><input class="inv-location" value="${escapeHtml(item.location||'')}" style="width:120px"></td>
+      <td><button class="secondary" onclick="saveInventoryRow('${escapeHtml(item.key)}')">Save</button></td>
+    </tr>`).join('')
+    : '<tr><td colspan="9" class="muted">No blank inventory received yet.</td></tr>';
+}
+
+function renderTransactions(){
+  document.querySelector('#transactionsTable tbody').innerHTML=transactions.length
+    ? transactions.map(tx=>`<tr>
+      <td>${new Date(tx.createdAt).toLocaleString()}</td>
+      <td>${escapeHtml(tx.type)}</td>
+      <td>${escapeHtml(tx.brand)} ${escapeHtml(tx.style)} / ${escapeHtml(tx.color)} / ${escapeHtml(tx.size)}</td>
+      <td class="${Number(tx.quantity)>=0?'success':'error'}">${Number(tx.quantity)>=0?'+':''}${tx.quantity}</td>
+      <td>${tx.resultingQty}</td>
+      <td>${escapeHtml(tx.reference||'')}</td>
+      <td>${escapeHtml(tx.note||'')}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="7" class="muted">No transactions yet.</td></tr>';
+}
+
+async function receiveInventory(){
+  receiveMessage.innerHTML='<div class="muted">Receiving inventory…</div>';
+
+  const response=await fetch('/api/inventory/receive',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      garmentName:garmentName.value.trim(),
+      brand:brand.value.trim(),
+      styleCode:style.value.trim(),
+      color:color.value.trim(),
+      size:size.value.trim(),
+      quantity:Number(quantity.value||0),
+      reference:reference.value.trim(),
+      note:note.value.trim()
+    })
+  });
+  const data=await response.json();
+
+  receiveMessage.innerHTML=response.ok
+    ? `<div class="success">✓ Received ${quantity.value} piece(s). New on-hand quantity: ${data.record.onHandQty}. SKU: ${escapeHtml(data.record.supplierSku||'pending catalog match')}.</div>`
+    : `<div class="error">${escapeHtml(data.error)}</div>`;
+
+  if(response.ok){
+    quantity.value='1';
+    note.value='';
+    await loadInventory();
+  }
+}
+
+async function saveInventoryRow(key){
+  const row=[...document.querySelectorAll('#inventoryTable tbody tr')].find(entry=>entry.dataset.key===key);
+  const item=inventory.find(entry=>entry.key===key);
+  if(!row||!item)return;
+
+  const response=await fetch('/api/inventory/adjust',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      supplierSku:item.supplierSku,
+      garmentName:item.garmentName,
+      brand:item.brand,
+      styleCode:item.style,
+      color:item.color,
+      size:item.size,
+      onHandQty:Number(row.querySelector('.inv-onhand').value||0),
+      minimumQty:Number(row.querySelector('.inv-minimum').value||0),
+      location:row.querySelector('.inv-location').value.trim(),
+      note:'Manual inventory row update'
+    })
+  });
+  const data=await response.json();
+
+  receiveMessage.innerHTML=response.ok
+    ? `<div class="success">✓ Inventory saved for ${escapeHtml(item.brand)} ${escapeHtml(item.style)} ${escapeHtml(item.color)} ${escapeHtml(item.size)}.</div>`
+    : `<div class="error">${escapeHtml(data.error)}</div>`;
+
+  if(response.ok)await loadInventory();
+}
+
+loadInventory();
+</script>
+</body>
+</html>

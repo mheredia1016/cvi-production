@@ -60,3 +60,25 @@ button:disabled{opacity:.45;cursor:not-allowed}
 button.mini{padding:5px 8px;font-size:11px;margin-top:5px}
 #ssDraft{overflow-x:auto}
 #ssDraft table{min-width:1550px}
+
+.inventory-form-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:14px;
+  margin:18px 0;
+}
+.inventory-form-grid label{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  color:#aac0e5;
+  font-weight:700;
+}
+.inventory-form-grid input,#search{
+  background:#0f1420;
+  color:#fff;
+  border:1px solid #36435f;
+  border-radius:9px;
+  padding:11px 12px;
+}
+.row.between{justify-content:space-between;align-items:center}

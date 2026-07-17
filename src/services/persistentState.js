@@ -20,6 +20,8 @@ function serializableState() {
     importedOrders: runtimeStore.importedOrders,
     pieces: runtimeStore.pieces,
     printHistory: runtimeStore.printHistory,
+    blankInventory: runtimeStore.blankInventory,
+    inventoryTransactions: runtimeStore.inventoryTransactions,
     dailyWorkflows: runtimeStore.dailyWorkflows,
     purchaseDrafts: runtimeStore.purchaseDrafts,
     artworkLookups: runtimeStore.artworkLookups,
@@ -44,6 +46,7 @@ function applyState(state) {
     "importedOrders",
     "pieces",
     "printHistory",
+    "inventoryTransactions",
     "artworkLookups",
     "graphicsJobs",
     "dryRunPrintJobs",
@@ -57,6 +60,7 @@ function applyState(state) {
   const objectFields = [
     "dailyWorkflows",
     "purchaseDrafts",
+    "blankInventory",
     "graphicsLabPieceStatus",
     "settings",
     "ssCatalog"

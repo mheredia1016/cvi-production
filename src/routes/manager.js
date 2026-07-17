@@ -22,6 +22,7 @@ import {
   listSsGarmentMappings,
   resolveSsLookup
 } from "../services/ssGarmentMappings.js";
+import { getOnHand } from "../services/blankInventory.js";
 
 export const managerRouter = express.Router();
 
@@ -375,6 +376,15 @@ managerRouter.post("/ss-draft/refresh-inventory", async (req, res) => {
       item.mappedBrand = lookup.mapping?.brand || product.brandName || "";
       item.mappedStyle = lookup.mapping?.style || product.styleName || "";
       item.mappingName = lookup.mapping?.garmentName || "";
+      item.onHandQty = getOnHand({
+        supplierSku: product.sku,
+        garmentName: item.style,
+        brand: product.brandName,
+        styleCode: product.styleName,
+        color: product.colorName,
+        size: product.sizeName
+      });
+
       const orderQty = Math.max(
         0,
         Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
@@ -491,6 +501,15 @@ managerRouter.post("/ss-draft/line/:lineId/refresh", async (req, res) => {
     item.mappedBrand = lookup.mapping?.brand || product.brandName || "";
     item.mappedStyle = lookup.mapping?.style || product.styleName || "";
     item.mappingName = lookup.mapping?.garmentName || "";
+    item.onHandQty = getOnHand({
+      supplierSku: product.sku,
+      garmentName: item.style,
+      brand: product.brandName,
+      styleCode: product.styleName,
+      color: product.colorName,
+      size: product.sizeName
+    });
+
     const orderQty = Math.max(
       0,
       Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
@@ -558,6 +577,18 @@ managerRouter.get("/ss-draft", (req, res) => {
     item.mappedBrand = mapping?.brand || item.mappedBrand || "";
     item.mappedStyle = mapping?.style || item.mappedStyle || "";
     item.mappingName = mapping?.garmentName || item.mappingName || "";
+    item.onHandQty = getOnHand({
+      supplierSku: item.supplierSku,
+      garmentName: item.style,
+      brand: item.mappedBrand,
+      styleCode: item.mappedStyle,
+      color: item.color,
+      size: item.size
+    });
+    item.orderQty = Math.max(
+      0,
+      Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
+    );
   }
 
   res.json({

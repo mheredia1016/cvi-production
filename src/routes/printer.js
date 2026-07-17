@@ -671,17 +671,46 @@ printerRouter.post("/piece/:pieceId/mark-graphics-printed", (req, res) => {
   };
 
   const updated = graphicsLabStatus(piece);
+  let inventory = null;
+
+  try {
+    if (updated.pieceComplete && !piece.inventoryDeductedAt) {
+      inventory = deductInventoryForPrintedPiece(piece);
+    } else if (!updated.pieceComplete && piece.inventoryDeductedAt) {
+      inventory = restoreInventoryForPiece(piece);
+    }
+  } catch (error) {
+    return res.status(409).json({
+      success: false,
+      error: error.message,
+      status: updated,
+      inventoryDeductionFailed: true
+    });
+  }
+
+  schedulePersistentSave();
 
   res.json({
     success: true,
     message: printed ? `${side} marked printed.` : `${side} print status cleared.`,
-    status: updated
+    status: updated,
+    inventory
   });
 });
 
 printerRouter.post("/piece/:pieceId/reset-graphics-lab", (req, res) => {
   const piece = findPiece(req.params.pieceId);
   if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  let inventory = null;
+
+  try {
+    if (piece.inventoryDeductedAt) {
+      inventory = restoreInventoryForPiece(piece);
+    }
+  } catch (error) {
+    return res.status(409).json({ success: false, error: error.message });
+  }
 
   runtimeStore.graphicsLabPieceStatus[piece.pieceId] = {
     pieceId: piece.pieceId,
@@ -690,7 +719,8 @@ printerRouter.post("/piece/:pieceId/reset-graphics-lab", (req, res) => {
     completedAt: null
   };
 
-  res.json({ success: true, status: graphicsLabStatus(piece) });
+  schedulePersistentSave();
+  res.json({ success: true, status: graphicsLabStatus(piece), inventory });
 });
 
 

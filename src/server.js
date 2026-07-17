@@ -7,6 +7,7 @@ import { storesRouter, initializeEnabledStores } from "./routes/stores.js";
 import { managerRouter } from "./routes/manager.js";
 import { settingsRouter } from "./routes/settings.js";
 import { printerRouter } from "./routes/printer.js";
+import { inventoryRouter } from "./routes/inventory.js";
 import {
   loadPersistentState,
   persistentStateInfo,
@@ -29,11 +30,12 @@ app.use("/api/stores", storesRouter);
 app.use("/api/manager", managerRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/printer", printerRouter);
+app.use("/api/inventory", inventoryRouter);
 
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    service: "ProductionOS v9.0",
+    service: "ProductionOS v9.1",
     mode: "SHADOW",
     persistentState: {
       loaded: persistentLoad.loaded,
@@ -43,5 +45,5 @@ app.get("/health", (req, res) => {
 });
 
 app.listen(config.port, () => {
-  console.log(`ProductionOS v9.0 running on port ${config.port}`);
+  console.log(`ProductionOS v9.1 running on port ${config.port}`);
 });

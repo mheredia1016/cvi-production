@@ -36,6 +36,8 @@ export const runtimeStore = {
   importedOrders: [],
   pieces: [],
   printHistory: [],
+  blankInventory: {},
+  inventoryTransactions: [],
   dailyWorkflows: {},
   purchaseDrafts: {},
   artworkLookups: [],

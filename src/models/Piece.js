@@ -33,6 +33,8 @@ export function createPiece(data) {
     status: "waiting",
     labelPrinted: false,
     labelPrintedAt: null,
-    labelStock: data.rush ? "red" : "white"
+    labelStock: data.rush ? "red" : "white",
+    inventoryDeductedAt: null,
+    inventoryDeductionKey: null
   };
 }

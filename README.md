@@ -307,3 +307,8 @@ Corrects mapped style requests to use identifiers such as `Gildan 5000` and sync
 # ProductionOS v9.0 Stable Foundation
 
 Adds the documented S&S style → styleID → product variant workflow and persistent Railway Volume storage. See `PRODUCTIONOS-V9-SETUP.md`.
+
+
+## ProductionOS v9.1 Blank Inventory
+
+Adds receiving, local on-hand inventory, transaction history, S&S draft allocation, and automatic print deductions. See `PRODUCTIONOS-V9-1-INVENTORY.md`.
