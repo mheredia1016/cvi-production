@@ -479,3 +479,193 @@ printerRouter.post("/agent/dry-run-jobs/:jobId/complete", (req, res) => {
   job.error = req.body?.error || null;
   res.json({ success: true });
 });
+
+
+function graphicsLabStatus(piece) {
+  if (!runtimeStore.graphicsLabPieceStatus[piece.pieceId]) {
+    runtimeStore.graphicsLabPieceStatus[piece.pieceId] = {
+      pieceId: piece.pieceId,
+      front: { openedAt: null, printedAt: null, outputPath: null },
+      back: { openedAt: null, printedAt: null, outputPath: null },
+      completedAt: null
+    };
+  }
+
+  const status = runtimeStore.graphicsLabPieceStatus[piece.pieceId];
+  const frontPrinted = Boolean(status.front.printedAt);
+  const backPrinted = !piece.requiresBack || Boolean(status.back.printedAt);
+
+  if (frontPrinted && backPrinted && !status.completedAt) {
+    status.completedAt = new Date().toISOString();
+  }
+
+  if (!(frontPrinted && backPrinted)) {
+    status.completedAt = null;
+  }
+
+  return {
+    ...status,
+    requiresBack: Boolean(piece.requiresBack),
+    pieceComplete: Boolean(frontPrinted && backPrinted)
+  };
+}
+
+printerRouter.get("/piece/:pieceId/graphics-lab-status", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  res.json(graphicsLabStatus(piece));
+});
+
+printerRouter.post("/piece/:pieceId/open-graphics-lab", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  const side = String(req.body?.side || "").toLowerCase();
+  if (!["front", "back"].includes(side)) {
+    return res.status(400).json({ error: "Side must be front or back." });
+  }
+
+  if (side === "back" && !piece.requiresBack) {
+    return res.status(400).json({ error: "This piece does not require back artwork." });
+  }
+
+  const lookup = latestCompleteLookup(piece.pieceId);
+  if (!lookup) {
+    return res.status(400).json({ error: "Complete the artwork lookup first." });
+  }
+
+  const artwork = side === "front" ? lookup.front : lookup.back;
+  if (!artwork?.found || !artwork.path) {
+    return res.status(400).json({ error: `${side} artwork is missing.` });
+  }
+
+  const active = runtimeStore.graphicsLabOpenJobs.find(
+    (job) => job.pieceId === piece.pieceId &&
+      job.side === side &&
+      ["queued", "processing"].includes(job.status)
+  );
+
+  if (active) {
+    return res.json({
+      success: true,
+      message: `${side} artwork is already being opened.`,
+      job: active
+    });
+  }
+
+  const job = {
+    id: `GL-OPEN-${Date.now()}-${piece.pieceId}-${side}`,
+    pieceId: piece.pieceId,
+    orderNumber: piece.orderNumber,
+    side,
+    artworkPath: artwork.path,
+    artworkFilename: artwork.filename,
+    artworkSku: piece.artworkSku,
+    process: piece.process,
+    status: "queued",
+    queuedAt: new Date().toISOString(),
+    error: null
+  };
+
+  runtimeStore.graphicsLabOpenJobs.push(job);
+
+  res.json({
+    success: true,
+    message: `${side} artwork queued to open in Graphics Lab.`,
+    job
+  });
+});
+
+printerRouter.post("/piece/:pieceId/mark-graphics-printed", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  const side = String(req.body?.side || "").toLowerCase();
+  const printed = req.body?.printed !== false;
+
+  if (!["front", "back"].includes(side)) {
+    return res.status(400).json({ error: "Side must be front or back." });
+  }
+
+  if (side === "back" && !piece.requiresBack) {
+    return res.status(400).json({ error: "This piece does not require a back print." });
+  }
+
+  const status = graphicsLabStatus(piece);
+  status[side].printedAt = printed ? new Date().toISOString() : null;
+
+  // Persist mutation because graphicsLabStatus returns the same nested object.
+  runtimeStore.graphicsLabPieceStatus[piece.pieceId] = {
+    pieceId: status.pieceId,
+    front: status.front,
+    back: status.back,
+    completedAt: null
+  };
+
+  const updated = graphicsLabStatus(piece);
+
+  res.json({
+    success: true,
+    message: printed ? `${side} marked printed.` : `${side} print status cleared.`,
+    status: updated
+  });
+});
+
+printerRouter.post("/piece/:pieceId/reset-graphics-lab", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  runtimeStore.graphicsLabPieceStatus[piece.pieceId] = {
+    pieceId: piece.pieceId,
+    front: { openedAt: null, printedAt: null, outputPath: null },
+    back: { openedAt: null, printedAt: null, outputPath: null },
+    completedAt: null
+  };
+
+  res.json({ success: true, status: graphicsLabStatus(piece) });
+});
+
+printerRouter.get("/agent/graphics-lab-open-jobs", (req, res) => {
+  if (req.query.token !== config.agentToken) {
+    return res.status(401).json({ error: "Unauthorized agent token." });
+  }
+
+  const jobs = runtimeStore.graphicsLabOpenJobs.filter(
+    (job) => job.status === "queued"
+  );
+
+  for (const job of jobs) {
+    job.status = "processing";
+    job.processingAt = new Date().toISOString();
+  }
+
+  res.json(jobs);
+});
+
+printerRouter.post("/agent/graphics-lab-open-jobs/:jobId/complete", (req, res) => {
+  if (req.query.token !== config.agentToken) {
+    return res.status(401).json({ error: "Unauthorized agent token." });
+  }
+
+  const job = runtimeStore.graphicsLabOpenJobs.find(
+    (entry) => entry.id === req.params.jobId
+  );
+
+  if (!job) return res.status(404).json({ error: "Graphics Lab open job not found." });
+
+  job.status = req.body?.error ? "error" : "opened";
+  job.completedAt = new Date().toISOString();
+  job.error = req.body?.error || null;
+
+  if (!job.error) {
+    const piece = findPiece(job.pieceId);
+    if (piece) {
+      const status = graphicsLabStatus(piece);
+      status[job.side].openedAt = job.completedAt;
+      status[job.side].outputPath = job.artworkPath;
+    }
+  }
+
+  res.json({ success: true });
+});

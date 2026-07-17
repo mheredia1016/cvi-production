@@ -9,6 +9,8 @@ export const runtimeStore = {
   artworkLookups: [],
   graphicsJobs: [],
   dryRunPrintJobs: [],
+  graphicsLabOpenJobs: [],
+  graphicsLabPieceStatus: {},
   pieceCounter: 14540600,
   settings: {
     printOrder: [

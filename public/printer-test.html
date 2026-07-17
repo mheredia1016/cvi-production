@@ -41,6 +41,13 @@
       <div id="artworkPanel">No artwork lookup requested.</div>
     </section>
 
+    <section class="card gl-station">
+      <h2>Graphics Lab Station</h2>
+      <p class="muted">Open each required artwork side in Graphics Lab, print it, then mark that side complete.</p>
+      <div id="graphicsLabControls">Load a piece first.</div>
+      <div id="graphicsLabStatus"></div>
+    </section>
+
     <section class="card">
       <h2>Brother Print Engine — Dry Run</h2>
       <p class="muted">Builds local artwork and XML files only. No ARX or printer command.</p>
@@ -123,6 +130,7 @@ async function loadPiece(){
   await refreshGraphicsStatus();
   await loadDryRunSettings();
   await loadDryRunStatus();
+  await loadGraphicsLabStation();
   statusPoll=setInterval(refreshGraphicsStatus,1500);
 }
 
@@ -166,6 +174,7 @@ async function refreshLookup(){
 
   if(['complete','error'].includes(data.status)){
     clearInterval(lookupPoll);
+    loadGraphicsLabStation();
   }
 }
 
@@ -275,6 +284,138 @@ async function loadDryRunStatus(){
     ${job.error?`<div class="error">${escapeHtml(job.error)}</div>`:''}
     <p class="muted">No ARX generated. No printer command executed.</p>`;
 }
+
+
+function glSideCard(side, required, lookupResult, state){
+  const title=side==='front'?'Front':'Back';
+
+  if(!required){
+    return `<div class="gl-side done">
+      <h3>${title}</h3>
+      <p class="muted">Not required.</p>
+    </div>`;
+  }
+
+  const found=Boolean(lookupResult?.found);
+  const opened=Boolean(state?.openedAt);
+  const printed=Boolean(state?.printedAt);
+
+  return `<div class="gl-side ${printed?'done':''}">
+    <h3>${title} ${printed?'✓':''}</h3>
+    <p><b>Artwork:</b> ${escapeHtml(lookupResult?.filename||'Not searched')}</p>
+    <p><b>Found:</b> ${found?'Yes':'No'}</p>
+    <p><b>Opened:</b> ${opened?new Date(state.openedAt).toLocaleString():'No'}</p>
+    <p><b>Printed:</b> ${printed?new Date(state.printedAt).toLocaleString():'No'}</p>
+    <div class="row">
+      <button ${found?'':'disabled'} onclick="openGraphicsLab('${side}')">Open ${title} in Graphics Lab</button>
+      <button class="secondary" onclick="markGraphicsPrinted('${side}',${printed?'false':'true'})">
+        ${printed?'Clear Printed':'Mark '+title+' Printed'}
+      </button>
+    </div>
+  </div>`;
+}
+
+async function loadGraphicsLabStation(){
+  if(!currentPiece)return;
+
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/graphics-lab-status'
+  );
+  const data=await response.json();
+
+  if(!response.ok){
+    graphicsLabStatus.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  const instruction=(currentPiece.printerInstructions||[]).includes('Uncheck Black')
+    ? '<div class="printer-warning">⚠ UNCHECK BLACK BEFORE PRINTING</div>'
+    : '';
+
+  graphicsLabControls.innerHTML=`
+    ${instruction}
+    <div class="gl-summary">
+      <div><span>Piece</span><b>${escapeHtml(currentPiece.pieceId)}</b></div>
+      <div><span>Process</span><b>${escapeHtml(currentPiece.process)}</b></div>
+      <div><span>Recommended Preset</span><b>${escapeHtml(recommendedPreset(currentPiece))}</b></div>
+      <div><span>Garment</span><b>${escapeHtml(currentPiece.style||currentPiece.garment)} / ${escapeHtml(currentPiece.color)} / ${escapeHtml(currentPiece.size)}</b></div>
+    </div>
+    <div class="gl-sides">
+      ${glSideCard('front',true,currentLookup?.front,data.front)}
+      ${glSideCard('back',currentPiece.requiresBack,currentLookup?.back,data.back)}
+    </div>
+    <button class="danger" onclick="resetGraphicsLabStation()">Reset This Piece</button>`;
+
+  graphicsLabStatus.innerHTML=`
+    <div class="${data.pieceComplete?'piece-complete':'piece-incomplete'}">
+      ${data.pieceComplete?'✓ PIECE COMPLETE':'Complete every required side before moving on.'}
+    </div>`;
+}
+
+function recommendedPreset(piece){
+  const process=String(piece.process||'').toLowerCase();
+  if(process.includes('white ink'))return 'White Ink Standard';
+  if(process.includes('dtg light'))return 'DTG Light';
+  if(process.includes('dtf'))return 'DTF';
+  if(process.includes('sublimation'))return 'Sublimation';
+  return piece.process||'Confirm preset';
+}
+
+async function openGraphicsLab(side){
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/open-graphics-lab',
+    {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({side})
+    }
+  );
+  const data=await response.json();
+
+  message.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  setTimeout(loadGraphicsLabStation,1200);
+}
+
+async function markGraphicsPrinted(side,printed){
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/mark-graphics-printed',
+    {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({side,printed})
+    }
+  );
+  const data=await response.json();
+
+  message.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  await loadGraphicsLabStation();
+
+  if(response.ok && data.status?.pieceComplete){
+    scanner.value='';
+    scanner.focus();
+  }
+}
+
+async function resetGraphicsLabStation(){
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/reset-graphics-lab',
+    {method:'POST'}
+  );
+  const data=await response.json();
+
+  message.innerHTML=response.ok
+    ? '<div class="success">✓ Graphics Lab status reset.</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  await loadGraphicsLabStation();
+}
+
 
 function artCard(title,result,required,side){
   if(!required){

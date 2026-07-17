@@ -237,3 +237,48 @@ Restart:
 ```cmd
 npm.cmd run agent
 ```
+
+
+## v8.0 Graphics Lab Station
+
+The Printer Scan Test now includes a production-style Graphics Lab workflow:
+
+1. Scan/load a piece.
+2. Search the Merch Heroes artwork drive.
+3. Review front/back previews and special instructions.
+4. Click **Open Front in Graphics Lab**.
+5. Print in Graphics Lab and click **Mark Front Printed**.
+6. Repeat for the back when required.
+7. ProductionOS shows **Piece Complete** only when all required sides are marked printed.
+
+### Local `.env`
+
+The easiest mode uses the Windows PNG association:
+
+```text
+GRAPHICS_LAB_OPEN_MODE=associated_app
+GRAPHICS_LAB_EXE=
+GRAPHICS_LAB_POLL_MS=1500
+```
+
+Since PNG files are already associated with Graphics Lab, the local agent opens the exact matched artwork path through Windows.
+
+A direct executable mode is also available later:
+
+```text
+GRAPHICS_LAB_OPEN_MODE=exe
+GRAPHICS_LAB_EXE=C:\Path\To\GraphicsLab.exe
+```
+
+Restart the local agent after updating:
+
+```cmd
+npm.cmd run agent
+```
+
+Brother SDK direct printing remains disabled.
+
+
+## v8.1 Auto-Detect Local Agent
+
+Local computers normally require only `SERVER_URL` and `AGENT_TOKEN`. Use `SETUP-LOCAL-AGENT.cmd`, `CHECK-LOCAL-AGENT.cmd`, and `START-PRODUCTIONOS-AGENT.cmd` for Windows setup and diagnostics.

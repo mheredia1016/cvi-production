@@ -1,11 +1,12 @@
 {
-  "name": "productionos-v7-print-engine-dry-run",
-  "version": "7.0.0",
+  "name": "productionos-v8-1-auto-detect-agent",
+  "version": "8.1.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "agent": "node agent/artwork-agent.js"
+    "agent": "node agent/artwork-agent.js",
+    "agent:diagnose": "node agent/artwork-agent.js --diagnose"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

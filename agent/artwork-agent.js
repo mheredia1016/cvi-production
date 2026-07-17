@@ -2,17 +2,160 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { spawn } from "child_process";
 
-const SERVER_URL = String(process.env.SERVER_URL || "http://localhost:3000").replace(/\/+$/, "");
-const AGENT_TOKEN = process.env.AGENT_TOKEN || "change-this-private-token";
-const ARTWORK_ROOT = process.env.MERCH_HEROES_ARTWORK_ROOT || "Z:\\Merch Heroes\\Designs";
+const SERVER_URL = String(process.env.SERVER_URL || "").replace(/\/+$/, "");
+const AGENT_TOKEN = String(process.env.AGENT_TOKEN || "").trim();
+const STATION_NAME = String(process.env.STATION_NAME || process.env.COMPUTERNAME || "Production Station").trim();
+const REQUESTED_ARTWORK_ROOT = String(
+  process.env.MERCH_HEROES_ARTWORK_ROOT ||
+  process.env.ARTWORK_ROOT ||
+  ""
+).trim();
 const POLL_MS = Number(process.env.ARTWORK_AGENT_POLL_MS || 3000);
 const PREVIEW_MAX_BYTES = Number(process.env.ARTWORK_PREVIEW_MAX_MB || 3) * 1024 * 1024;
 const GRAPHICS_TEST_HOTFOLDER = process.env.GRAPHICS_TEST_HOTFOLDER || "C:\\ProductionOS\\TestHotFolder";
 const PRINT_DRY_RUN_ROOT = process.env.PRINT_DRY_RUN_ROOT || "C:\\ProductionOS\\DryRunJobs";
+const GRAPHICS_LAB_EXE = String(process.env.GRAPHICS_LAB_EXE || "").trim();
+const GRAPHICS_LAB_OPEN_MODE = String(process.env.GRAPHICS_LAB_OPEN_MODE || "associated_app").trim().toLowerCase();
+const DIAGNOSE_ONLY = process.argv.includes("--diagnose");
+
+let ARTWORK_ROOT = "";
 
 let fileIndex = new Map();
 let indexing = false;
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function artworkRootCandidates() {
+  const candidates = [
+    REQUESTED_ARTWORK_ROOT,
+    "Z:\\Merch Heroes\\Designs",
+    "Y:\\Merch Heroes\\Designs",
+    "X:\\Merch Heroes\\Designs",
+    "Z:\\Designs",
+    "Y:\\Designs",
+    "X:\\Designs"
+  ];
+
+  // Search mapped/local Windows drives without requiring PowerShell.
+  for (let code = "D".charCodeAt(0); code <= "Z".charCodeAt(0); code += 1) {
+    const drive = String.fromCharCode(code);
+    candidates.push(`${drive}:\\Merch Heroes\\Designs`);
+  }
+
+  return unique(candidates);
+}
+
+function detectArtworkRoot() {
+  for (const candidate of artworkRootCandidates()) {
+    try {
+      if (candidate && fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      // Continue to the next candidate.
+    }
+  }
+
+  return REQUESTED_ARTWORK_ROOT || "Z:\\Merch Heroes\\Designs";
+}
+
+function ensureLocalFolders() {
+  for (const directory of [GRAPHICS_TEST_HOTFOLDER, PRINT_DRY_RUN_ROOT]) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+}
+
+function validateRequiredSettings() {
+  const errors = [];
+
+  if (!SERVER_URL) {
+    errors.push("SERVER_URL is missing.");
+  } else if (!/^https?:\/\//i.test(SERVER_URL)) {
+    errors.push("SERVER_URL must begin with http:// or https://.");
+  }
+
+  if (!AGENT_TOKEN) {
+    errors.push("AGENT_TOKEN is missing.");
+  } else if (AGENT_TOKEN === "change-this-private-token") {
+    errors.push("AGENT_TOKEN still uses the sample value.");
+  }
+
+  return errors;
+}
+
+async function testServerConnection() {
+  if (!SERVER_URL || !AGENT_TOKEN) {
+    return { ok: false, message: "Skipped because SERVER_URL or AGENT_TOKEN is missing." };
+  }
+
+  try {
+    const response = await fetch(
+      `${SERVER_URL}/api/printer/agent/jobs?token=${encodeURIComponent(AGENT_TOKEN)}`
+    );
+
+    if (response.ok) {
+      return { ok: true, message: `Connected successfully (HTTP ${response.status}).` };
+    }
+
+    const text = await response.text();
+    return {
+      ok: false,
+      message: `Server returned HTTP ${response.status}: ${text.slice(0, 160)}`
+    };
+  } catch (error) {
+    return { ok: false, message: error.message };
+  }
+}
+
+async function printStartupDiagnostics() {
+  const settingsErrors = validateRequiredSettings();
+  const artworkExists = Boolean(ARTWORK_ROOT && fs.existsSync(ARTWORK_ROOT));
+  const serverTest = await testServerConnection();
+
+  console.log("");
+  console.log("============================================================");
+  console.log(" ProductionOS Local Agent");
+  console.log("============================================================");
+  console.log(`Station:              ${STATION_NAME}`);
+  console.log(`Server:               ${SERVER_URL || "NOT CONFIGURED"}`);
+  console.log(`Agent token:          ${AGENT_TOKEN ? "Configured" : "NOT CONFIGURED"}`);
+  console.log(`Artwork root:         ${ARTWORK_ROOT}`);
+  console.log(`Artwork root status:  ${artworkExists ? "FOUND" : "NOT FOUND"}`);
+  console.log(`Graphics Lab mode:    ${GRAPHICS_LAB_OPEN_MODE}`);
+  console.log(`Graphics Lab EXE:     ${GRAPHICS_LAB_EXE || "Windows PNG association"}`);
+  console.log(`Test hotfolder:       ${GRAPHICS_TEST_HOTFOLDER}`);
+  console.log(`Dry-run folder:       ${PRINT_DRY_RUN_ROOT}`);
+  console.log(`Server connection:    ${serverTest.ok ? "OK" : "FAILED"}`);
+  console.log(`Server result:        ${serverTest.message}`);
+
+  if (settingsErrors.length) {
+    console.log("");
+    console.log("Configuration errors:");
+    for (const error of settingsErrors) console.log(`  - ${error}`);
+  }
+
+  if (!artworkExists) {
+    console.log("");
+    console.log("Artwork warning:");
+    console.log("  The agent checked mapped drives D: through Z: for");
+    console.log('  "Merch Heroes\\Designs" but could not find it.');
+    console.log("  Map the artwork drive for this Windows user or set ARTWORK_ROOT.");
+  }
+
+  console.log("============================================================");
+  console.log("");
+
+  return {
+    valid: settingsErrors.length === 0,
+    artworkExists,
+    serverConnected: serverTest.ok
+  };
+}
+
 
 function normalizeFilename(value) {
   return String(value || "").trim().toLowerCase();
@@ -40,6 +183,10 @@ async function rebuildIndex() {
   indexing = true;
 
   try {
+    if (!ARTWORK_ROOT || !fs.existsSync(ARTWORK_ROOT)) {
+      throw new Error(`Artwork root is unavailable: ${ARTWORK_ROOT}`);
+    }
+
     console.log(`Indexing artwork under: ${ARTWORK_ROOT}`);
     const files = await walk(ARTWORK_ROOT);
     const nextIndex = new Map();
@@ -380,29 +527,167 @@ async function pollDryRunJobs() {
   }
 }
 
-async function start() {
-  console.log("ProductionOS Merch Heroes Artwork Agent");
-  console.log("Server:", SERVER_URL);
-  console.log("Artwork root:", ARTWORK_ROOT);
-  console.log("Graphics test hot folder:", GRAPHICS_TEST_HOTFOLDER);
-  console.log("Print dry-run root:", PRINT_DRY_RUN_ROOT);
 
-  if (!fs.existsSync(ARTWORK_ROOT)) {
-    console.error(`Artwork root is not accessible: ${ARTWORK_ROOT}`);
-    console.error("Confirm that Z: is mapped for the same Windows user running this terminal.");
-  } else {
-    await rebuildIndex();
+async function getGraphicsLabOpenJobs() {
+  const response = await fetch(
+    `${SERVER_URL}/api/printer/agent/graphics-lab-open-jobs?token=${encodeURIComponent(AGENT_TOKEN)}`
+  );
+
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Graphics Lab open endpoint returned non-JSON: ${text.slice(0, 200)}`);
   }
+
+  if (!response.ok) {
+    throw new Error(data.error || `Graphics Lab open jobs request failed: ${response.status}`);
+  }
+
+  return data;
+}
+
+async function completeGraphicsLabOpenJob(job, payload) {
+  const response = await fetch(
+    `${SERVER_URL}/api/printer/agent/graphics-lab-open-jobs/${encodeURIComponent(job.id)}/complete?token=${encodeURIComponent(AGENT_TOKEN)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  const text = await response.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+      `Could not complete Graphics Lab open job ${job.id}. HTTP ${response.status}: ${String(data.raw || "").slice(0, 200)}`
+    );
+  }
+}
+
+function openWithAssociatedApplication(filePath) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "cmd.exe",
+      ["/c", "start", "", filePath],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      }
+    );
+
+    child.once("error", reject);
+    child.unref();
+    setTimeout(resolve, 750);
+  });
+}
+
+function openWithGraphicsLabExe(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!GRAPHICS_LAB_EXE) {
+      reject(new Error("GRAPHICS_LAB_EXE is blank."));
+      return;
+    }
+
+    if (!fs.existsSync(GRAPHICS_LAB_EXE)) {
+      reject(new Error(`Graphics Lab executable was not found: ${GRAPHICS_LAB_EXE}`));
+      return;
+    }
+
+    const child = spawn(
+      GRAPHICS_LAB_EXE,
+      [filePath],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: false
+      }
+    );
+
+    child.once("error", reject);
+    child.unref();
+    setTimeout(resolve, 750);
+  });
+}
+
+async function processGraphicsLabOpenJob(job) {
+  try {
+    if (!fs.existsSync(job.artworkPath)) {
+      throw new Error(`Artwork file does not exist: ${job.artworkPath}`);
+    }
+
+    if (GRAPHICS_LAB_OPEN_MODE === "exe") {
+      await openWithGraphicsLabExe(job.artworkPath);
+    } else {
+      await openWithAssociatedApplication(job.artworkPath);
+    }
+
+    await completeGraphicsLabOpenJob(job, {});
+    console.log(`Opened ${job.side} in Graphics Lab: ${job.artworkPath}`);
+  } catch (error) {
+    console.error(`Graphics Lab open job ${job.id} failed:`, error.message);
+    await completeGraphicsLabOpenJob(job, { error: error.message });
+  }
+}
+
+async function pollGraphicsLabOpenJobs() {
+  try {
+    const jobs = await getGraphicsLabOpenJobs();
+    for (const job of jobs) {
+      await processGraphicsLabOpenJob(job);
+    }
+  } catch (error) {
+    console.error("Graphics Lab station error:", error.message);
+  }
+}
+
+async function start() {
+  ARTWORK_ROOT = detectArtworkRoot();
+  ensureLocalFolders();
+
+  const diagnostics = await printStartupDiagnostics();
+
+  if (DIAGNOSE_ONLY) {
+    process.exitCode = diagnostics.valid && diagnostics.artworkExists && diagnostics.serverConnected ? 0 : 1;
+    return;
+  }
+
+  if (!diagnostics.valid) {
+    throw new Error("Fix the local .env configuration errors shown above.");
+  }
+
+  if (!diagnostics.artworkExists) {
+    throw new Error(
+      `Artwork drive was not found. Map the network drive or set ARTWORK_ROOT in .env. Checked default path: ${ARTWORK_ROOT}`
+    );
+  }
+
+  console.log(`Starting ProductionOS agent for ${STATION_NAME}...`);
+  await rebuildIndex();
+
+  await poll();
+  await pollGraphicsJobs();
+  await pollDryRunJobs();
+  await pollGraphicsLabOpenJobs();
 
   setInterval(poll, POLL_MS);
   setInterval(pollGraphicsJobs, Number(process.env.GRAPHICS_AGENT_POLL_MS || 2000));
   setInterval(pollDryRunJobs, Number(process.env.PRINT_ENGINE_POLL_MS || 2000));
-  await poll();
-  await pollGraphicsJobs();
-  await pollDryRunJobs();
+  setInterval(pollGraphicsLabOpenJobs, Number(process.env.GRAPHICS_LAB_POLL_MS || 1500));
+
+  setInterval(
+    rebuildIndex,
+    Number(process.env.ARTWORK_REINDEX_MINUTES || 15) * 60 * 1000
+  );
 }
 
 start().catch((error) => {
-  console.error("Agent startup failed:", error);
+  console.error("Agent startup failed:", error.message);
   process.exitCode = 1;
 });
