@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v9-1-blank-inventory",
-  "version": "9.1.0",
+  "name": "productionos-v9-2-garment-order-date",
+  "version": "9.2.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

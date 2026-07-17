@@ -312,3 +312,8 @@ Adds the documented S&S style → styleID → product variant workflow and persi
 ## ProductionOS v9.1 Blank Inventory
 
 Adds receiving, local on-hand inventory, transaction history, S&S draft allocation, and automatic print deductions. See `PRODUCTIONOS-V9-1-INVENTORY.md`.
+
+
+## ProductionOS v9.2 Garment Order Date Selector
+
+Adds an independent Today / Yesterday / Custom date selector for the S&S garment order. See `PRODUCTIONOS-V9-2-GARMENT-DATE.md`.

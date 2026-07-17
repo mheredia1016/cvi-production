@@ -82,3 +82,48 @@ button.mini{padding:5px 8px;font-size:11px;margin-top:5px}
   padding:11px 12px;
 }
 .row.between{justify-content:space-between;align-items:center}
+
+
+.garment-order-header{
+  align-items:flex-start;
+  gap:22px;
+  flex-wrap:wrap;
+}
+
+.garment-order-date-box{
+  min-width:310px;
+  padding:14px;
+  background:#0f1420;
+  border:1px solid #36435f;
+  border-radius:12px;
+}
+
+.garment-order-date-box label{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  color:#aac0e5;
+  font-weight:800;
+}
+
+.garment-order-date-box input[type="date"]{
+  width:100%;
+  background:#151d2d;
+  color:#fff;
+  border:1px solid #536585;
+  border-radius:9px;
+  padding:10px 12px;
+}
+
+.compact-row{
+  margin-top:10px;
+  gap:7px;
+  flex-wrap:wrap;
+}
+
+@media(max-width:760px){
+  .garment-order-date-box{
+    width:100%;
+    min-width:0;
+  }
+}

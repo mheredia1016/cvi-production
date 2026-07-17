@@ -30,8 +30,31 @@
 <section class="card"><div id="labels"></div></section>
 <section class="card"><h2>Garment Report</h2><div id="garments">No data.</div></section>
 <section class="card no-print">
-  <h2>S&S Draft Order — Previous-Day Garments</h2>
-  <p class="muted">Built from the selected production date. Review quantities before any future S&S submission.</p>
+  <div class="row between garment-order-header">
+    <div>
+      <h2 id="ssDraftHeading">S&S Garment Order</h2>
+      <p class="muted">
+        Select the date whose imported garment requirements should be purchased.
+        This date is independent from the main Production Date above.
+      </p>
+    </div>
+
+    <div class="garment-order-date-box">
+      <label>
+        Garment Order Date
+        <input type="date" id="ssOrderDate" onchange="changeSsOrderDate()">
+      </label>
+
+      <div class="row compact-row">
+        <button class="secondary mini" onclick="setSsOrderDate('today')">Today</button>
+        <button class="secondary mini" onclick="setSsOrderDate('yesterday')">Yesterday</button>
+        <button class="secondary mini" onclick="setSsOrderDate('production')">Use Production Date</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ssDateNotice"></div>
+
   <div class="row">
     <button onclick="loadSsDraft()">Build / Refresh Draft</button>
     <button onclick="syncSsCatalog()">Sync Mapped S&S Catalog</button>
@@ -53,12 +76,76 @@ let currentCategory='';
 let currentStock='white';
 let printOrder=[];
 
+function localIsoDate(inputDate=new Date()){
+  const year=inputDate.getFullYear();
+  const month=String(inputDate.getMonth()+1).padStart(2,'0');
+  const day=String(inputDate.getDate()).padStart(2,'0');
+  return `${year}-${month}-${day}`;
+}
+
+function today(){
+  return localIsoDate(new Date());
+}
+
 function yesterday(){
   const d=new Date();
   d.setDate(d.getDate()-1);
-  return d.toISOString().slice(0,10);
+  return localIsoDate(d);
 }
+
 date.value=yesterday();
+
+const savedSsOrderDate=localStorage.getItem('productionos_ss_order_date');
+ssOrderDate.value=savedSsOrderDate||yesterday();
+
+
+function selectedSsOrderDate(){
+  return ssOrderDate.value || date.value || today();
+}
+
+function formatSelectedDate(value){
+  if(!value)return '';
+  const [year,month,day]=value.split('-').map(Number);
+  return new Date(year,month-1,day).toLocaleDateString(undefined,{
+    weekday:'short',
+    month:'short',
+    day:'numeric',
+    year:'numeric'
+  });
+}
+
+function updateSsDateDisplay(){
+  const selected=selectedSsOrderDate();
+  ssDraftHeading.textContent=`S&S Garment Order — ${formatSelectedDate(selected)}`;
+
+  let label='Custom date';
+  if(selected===today())label='Same-day order';
+  else if(selected===yesterday())label='Previous-day order';
+  else if(selected===date.value)label='Matches Production Date';
+
+  ssDateNotice.innerHTML=`
+    <div class="${selected===today()?'warning':'success'}">
+      <b>${escapeHtml(label)}:</b> ${escapeHtml(formatSelectedDate(selected))}
+      ${selected===today()
+        ? ' — same-day garments will appear after today’s orders have been imported.'
+        : ''}
+    </div>`;
+}
+
+async function changeSsOrderDate(){
+  localStorage.setItem('productionos_ss_order_date',selectedSsOrderDate());
+  currentSsDraft=null;
+  updateSsDateDisplay();
+  await loadSsDraft();
+}
+
+async function setSsOrderDate(mode){
+  if(mode==='today')ssOrderDate.value=today();
+  if(mode==='yesterday')ssOrderDate.value=yesterday();
+  if(mode==='production')ssOrderDate.value=date.value||today();
+  await changeSsOrderDate();
+}
+
 
 async function preview(){
   const response=await fetch('/api/manager/preview?date='+date.value);
@@ -454,7 +541,7 @@ function ssDraftRow(item){
 }
 
 async function loadSsDraft(){
-  const response=await fetch('/api/manager/ss-draft?date='+date.value);
+  const response=await fetch('/api/manager/ss-draft?date='+selectedSsOrderDate());
   const data=await response.json();
 
   if(!response.ok){
@@ -464,6 +551,7 @@ async function loadSsDraft(){
 
   currentSsDraft=data.draft;
   currentSsCatalog=data.catalog||null;
+  updateSsDateDisplay();
   ssConnection.innerHTML=data.configuration?.configured
     ? `<div class="success">✓ S&S credentials configured • Account ${escapeHtml(data.configuration.accountNumberMasked)}${data.configuration.warehouses?.length?' • Warehouses '+escapeHtml(data.configuration.warehouses.join(', ')):' • All warehouses'}</div>`
     : `<div class="error">S&S is not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY in Railway Variables.</div>`;
@@ -498,7 +586,10 @@ async function loadSsDraft(){
         <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Required</th><th>On Hand</th><th>Order</th><th>S&S Stock</th><th>Available / Warehouses</th><th>Unit Cost</th><th>Est. Cost</th><th>Buy Elsewhere</th><th>Notes</th></tr>
         ${currentSsDraft.items.map(ssDraftRow).join('')}
       </table>`
-    : '<p>No garment lines for this date.</p>';
+    : `<div class="warning">
+        No garment lines found for ${escapeHtml(formatSelectedDate(selectedSsOrderDate()))}.
+        Confirm orders for this date were imported using the main Production Date controls above.
+      </div>`;
 }
 
 function collectSsDraftItems(){
@@ -529,7 +620,7 @@ async function saveSsDraft(){
   const response=await fetch('/api/manager/ss-draft',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({date:date.value,items:collectSsDraftItems()})
+    body:JSON.stringify({date:selectedSsOrderDate(),items:collectSsDraftItems()})
   });
   const data=await response.json();
 
@@ -546,7 +637,7 @@ async function reviewSsDraft(){
   const response=await fetch('/api/manager/ss-draft/review',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({date:date.value})
+    body:JSON.stringify({date:selectedSsOrderDate()})
   });
   const data=await response.json();
 
@@ -561,7 +652,7 @@ async function reviewSsDraft(){
 async function printOutOfStockReport(){
   await saveSsDraft();
 
-  const response=await fetch('/api/manager/ss-draft/out-of-stock?date='+date.value);
+  const response=await fetch('/api/manager/ss-draft/out-of-stock?date='+selectedSsOrderDate());
   const data=await response.json();
 
   if(!response.ok){
@@ -603,7 +694,7 @@ async function printOutOfStockReport(){
   </style></head>
   <body>
     <h1>S&S OUT OF STOCK — BUY ELSEWHERE</h1>
-    <p>Production Date: ${escapeHtml(data.productionDate)} | Lines: ${data.totals.lines} | Qty to Buy Elsewhere: ${data.totals.orderQty}</p>
+    <p>Garment Order Date: ${escapeHtml(data.productionDate)} | Lines: ${data.totals.lines} | Qty to Buy Elsewhere: ${data.totals.orderQty}</p>
     <table>
       <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Needed</th><th>S&S Available</th><th>Buy Elsewhere</th><th>Alternate Supplier</th><th>Notes</th></tr>
       ${rows || '<tr><td colspan="10">No out-of-stock or partial-stock garments.</td></tr>'}
@@ -617,7 +708,7 @@ async function submitSsDraft(){
   const response=await fetch('/api/manager/ss-draft/submit',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({date:date.value})
+    body:JSON.stringify({date:selectedSsOrderDate()})
   });
   const data=await response.json();
   msg.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
@@ -695,7 +786,7 @@ async function refreshAllSsInventory(){
   const response=await fetch('/api/manager/ss-draft/refresh-inventory',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({date:date.value,fresh:true})
+    body:JSON.stringify({date:selectedSsOrderDate(),fresh:true})
   });
   const data=await response.json();
 
@@ -721,7 +812,7 @@ async function refreshSsLine(lineId){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
-      date:date.value,
+      date:selectedSsOrderDate(),
       supplierSku:row.querySelector('.ss-sku').value.trim(),
       onHandQty:Number(row.querySelector('.ss-onhand').value||0)
     })
@@ -741,6 +832,7 @@ async function loadAll(){
   await Promise.all([loadSummary(),loadGarments(),loadReview(),loadSsDraft(),loadProductionInspector()]);
 }
 
+updateSsDateDisplay();
 preview();
 loadAll();
 </script>
