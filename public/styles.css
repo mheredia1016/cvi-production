@@ -54,3 +54,9 @@ pre{background:#0f1420;border:1px solid #29354d;border-radius:10px;padding:12px;
 button:disabled{opacity:.45;cursor:not-allowed}
 
 .error.compact{padding:9px 11px;margin:8px 0;font-size:13px}
+
+.warning{background:#fff7d6;color:#6b5100;border:1px solid #e6cd66;padding:10px;border-radius:8px}
+.small{font-size:11px;line-height:1.25;margin-top:4px;max-width:220px;white-space:normal}
+button.mini{padding:5px 8px;font-size:11px;margin-top:5px}
+#ssDraft{overflow-x:auto}
+#ssDraft table{min-width:1550px}

@@ -20,6 +20,16 @@ export function buildSsDraft(garmentRows, date) {
       orderQty: Number(row.qty || 0),
       stockStatus: "unknown",
       availableQty: null,
+      customerPrice: null,
+      estimatedCost: null,
+      warehouses: [],
+      ssBrandName: "",
+      ssStyleName: "",
+      ssColorName: "",
+      ssSizeName: "",
+      matchMethod: "",
+      inventoryCheckedAt: null,
+      inventoryError: "",
       alternateSupplier: "",
       notes: ""
     }))
@@ -37,6 +47,12 @@ export function summarizeSsDraft(draft) {
     outOfStockLines: items.filter((item) => item.stockStatus === "out_of_stock").length,
     outOfStockQty: items
       .filter((item) => item.stockStatus === "out_of_stock")
-      .reduce((sum, item) => sum + Number(item.orderQty || 0), 0)
+      .reduce((sum, item) => sum + Number(item.orderQty || 0), 0),
+    matchedLines: items.filter((item) => item.supplierSku && !item.inventoryError).length,
+    inventoryErrorLines: items.filter((item) => item.inventoryError).length,
+    estimatedCost: items.reduce(
+      (sum, item) => sum + Number(item.estimatedCost || 0),
+      0
+    )
   };
 }

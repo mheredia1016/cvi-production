@@ -7,6 +7,13 @@ import { createPiecesForOrder } from "../services/labelEngine.js";
 import { buildGarmentReport } from "../services/garmentReport.js";
 import { validateManagerDay } from "../services/managerValidation.js";
 import { buildSsDraft, summarizeSsDraft } from "../services/ssDraft.js";
+import {
+  clearSsCache,
+  getSsProductBySku,
+  matchSsProduct,
+  ssConfigurationStatus,
+  testSsConnection
+} from "../services/ssActivewear.js";
 
 export const managerRouter = express.Router();
 
@@ -253,6 +260,219 @@ managerRouter.post("/reprint-label", (req, res) => {
 });
 
 
+
+managerRouter.get("/ss/status", (req, res) => {
+  res.json(ssConfigurationStatus());
+});
+
+managerRouter.post("/ss/test", async (req, res) => {
+  try {
+    const result = await testSsConnection();
+    res.json(result);
+  } catch (error) {
+    res.status(502).json({
+      success: false,
+      error: error.message,
+      configuration: ssConfigurationStatus()
+    });
+  }
+});
+
+managerRouter.post("/ss/cache/clear", (req, res) => {
+  clearSsCache();
+  res.json({ success: true, message: "S&S product cache cleared." });
+});
+
+managerRouter.post("/ss/lookup", async (req, res) => {
+  try {
+    const result = await matchSsProduct({
+      supplierSku: req.body?.supplierSku,
+      style: req.body?.style,
+      color: req.body?.color,
+      size: req.body?.size,
+      fresh: Boolean(req.body?.fresh)
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(404).json({ success: false, error: error.message });
+  }
+});
+
+managerRouter.post("/ss-draft/refresh-inventory", async (req, res) => {
+  const date = req.body?.date || "";
+  const draft = runtimeStore.purchaseDrafts[date];
+
+  if (!draft) {
+    return res.status(404).json({ error: "Build the S&S draft first." });
+  }
+
+  const fresh = Boolean(req.body?.fresh);
+  const results = [];
+  let rateLimitRemaining = null;
+
+  for (const item of draft.items || []) {
+    try {
+      const result = await matchSsProduct({
+        supplierSku: item.supplierSku,
+        style: item.style,
+        color: item.color,
+        size: item.size,
+        fresh
+      });
+
+      const product = result.product;
+      const orderQty = Math.max(
+        0,
+        Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
+      );
+      const availableQty = Math.max(0, Number(product.availableQty || 0));
+
+      item.supplierSku = product.sku;
+      item.orderQty = orderQty;
+      item.availableQty = availableQty;
+      item.customerPrice = product.customerPrice;
+      item.estimatedCost = product.customerPrice === null
+        ? null
+        : Number((product.customerPrice * Math.min(orderQty, availableQty)).toFixed(2));
+      item.warehouses = product.warehouses;
+      item.ssBrandName = product.brandName;
+      item.ssStyleName = product.styleName;
+      item.ssColorName = product.colorName;
+      item.ssSizeName = product.sizeName;
+      item.matchMethod = result.matchMethod;
+      item.inventoryCheckedAt = new Date().toISOString();
+      item.inventoryError = "";
+
+      if (orderQty <= 0) {
+        item.stockStatus = "in_stock";
+      } else if (availableQty <= 0) {
+        item.stockStatus = "out_of_stock";
+      } else if (availableQty < orderQty) {
+        item.stockStatus = "partial";
+      } else {
+        item.stockStatus = "in_stock";
+      }
+
+      rateLimitRemaining = result.rateLimitRemaining ?? rateLimitRemaining;
+      results.push({
+        lineId: item.lineId,
+        success: true,
+        supplierSku: item.supplierSku,
+        availableQty,
+        stockStatus: item.stockStatus
+      });
+    } catch (error) {
+      item.stockStatus = "unknown";
+      item.availableQty = null;
+      item.customerPrice = null;
+      item.estimatedCost = null;
+      item.warehouses = [];
+      item.inventoryCheckedAt = new Date().toISOString();
+      item.inventoryError = error.message;
+
+      results.push({
+        lineId: item.lineId,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  draft.updatedAt = new Date().toISOString();
+  draft.lastInventoryRefreshAt = draft.updatedAt;
+
+  res.json({
+    success: true,
+    draft,
+    summary: summarizeSsDraft(draft),
+    results,
+    rateLimitRemaining
+  });
+});
+
+managerRouter.post("/ss-draft/line/:lineId/refresh", async (req, res) => {
+  const date = req.body?.date || "";
+  const draft = runtimeStore.purchaseDrafts[date];
+
+  if (!draft) {
+    return res.status(404).json({ error: "Build the S&S draft first." });
+  }
+
+  const item = (draft.items || []).find(
+    (entry) => entry.lineId === req.params.lineId
+  );
+
+  if (!item) {
+    return res.status(404).json({ error: "S&S draft line was not found." });
+  }
+
+  if (req.body?.supplierSku !== undefined) {
+    item.supplierSku = String(req.body.supplierSku || "").trim();
+  }
+  if (req.body?.onHandQty !== undefined) {
+    item.onHandQty = Math.max(0, Number(req.body.onHandQty || 0));
+  }
+
+  try {
+    const result = item.supplierSku
+      ? await getSsProductBySku(item.supplierSku, { fresh: true })
+      : await matchSsProduct({
+          style: item.style,
+          color: item.color,
+          size: item.size,
+          fresh: true
+        });
+
+    const product = result.product;
+    const orderQty = Math.max(
+      0,
+      Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
+    );
+    const availableQty = Math.max(0, Number(product.availableQty || 0));
+
+    Object.assign(item, {
+      supplierSku: product.sku,
+      orderQty,
+      availableQty,
+      customerPrice: product.customerPrice,
+      estimatedCost: product.customerPrice === null
+        ? null
+        : Number((product.customerPrice * Math.min(orderQty, availableQty)).toFixed(2)),
+      warehouses: product.warehouses,
+      ssBrandName: product.brandName,
+      ssStyleName: product.styleName,
+      ssColorName: product.colorName,
+      ssSizeName: product.sizeName,
+      matchMethod: result.matchMethod,
+      inventoryCheckedAt: new Date().toISOString(),
+      inventoryError: "",
+      stockStatus:
+        orderQty <= 0 || availableQty >= orderQty
+          ? "in_stock"
+          : availableQty > 0
+            ? "partial"
+            : "out_of_stock"
+    });
+
+    draft.updatedAt = new Date().toISOString();
+
+    res.json({
+      success: true,
+      item,
+      summary: summarizeSsDraft(draft),
+      rateLimitRemaining: result.rateLimitRemaining
+    });
+  } catch (error) {
+    item.stockStatus = "unknown";
+    item.availableQty = null;
+    item.inventoryError = error.message;
+    item.inventoryCheckedAt = new Date().toISOString();
+
+    res.status(404).json({ success: false, error: error.message, item });
+  }
+});
+
 managerRouter.get("/ss-draft", (req, res) => {
   const date = req.query.date || "";
   const pieces = date
@@ -270,7 +490,10 @@ managerRouter.get("/ss-draft", (req, res) => {
   res.json({
     draft,
     summary: summarizeSsDraft(draft),
-    warning: "Test draft only. No order will be submitted to S&S."
+    configuration: ssConfigurationStatus(),
+    warning: config.ss.submitEnabled
+      ? "S&S credentials are active. Live order submission is not included in v8.4."
+      : "Live inventory is enabled when credentials are configured. Purchase-order submission remains disabled."
   });
 });
 
@@ -299,6 +522,20 @@ managerRouter.post("/ss-draft", (req, res) => {
     availableQty: item.availableQty === null || item.availableQty === ""
       ? null
       : Math.max(0, Number(item.availableQty || 0)),
+    customerPrice: item.customerPrice === null || item.customerPrice === ""
+      ? null
+      : Math.max(0, Number(item.customerPrice || 0)),
+    estimatedCost: item.estimatedCost === null || item.estimatedCost === ""
+      ? null
+      : Math.max(0, Number(item.estimatedCost || 0)),
+    warehouses: Array.isArray(item.warehouses) ? item.warehouses : [],
+    ssBrandName: String(item.ssBrandName || ""),
+    ssStyleName: String(item.ssStyleName || ""),
+    ssColorName: String(item.ssColorName || ""),
+    ssSizeName: String(item.ssSizeName || ""),
+    matchMethod: String(item.matchMethod || ""),
+    inventoryCheckedAt: item.inventoryCheckedAt || null,
+    inventoryError: String(item.inventoryError || ""),
     alternateSupplier: String(item.alternateSupplier || ""),
     notes: String(item.notes || "")
   }));

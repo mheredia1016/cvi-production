@@ -19,6 +19,10 @@ export const config = {
   ss: {
     apiKey: process.env.SS_API_KEY || "",
     accountNumber: process.env.SS_ACCOUNT_NUMBER || "",
+    baseUrl: String(process.env.SS_API_BASE_URL || "https://api.ssactivewear.com/v2")
+      .replace(/\/+$/, ""),
+    warehouses: csv(process.env.SS_WAREHOUSES || ""),
+    cacheMinutes: Math.max(1, Number(process.env.SS_CACHE_MINUTES || 15)),
     submitEnabled: String(process.env.SS_SUBMIT_ENABLED || "false").toLowerCase() === "true"
   },
   shipstation: {

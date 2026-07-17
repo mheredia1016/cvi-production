@@ -287,3 +287,8 @@ Local computers normally require only `SERVER_URL` and `AGENT_TOKEN`. Use `SETUP
 ## v8.3 Graphics Lab Retry Reliability
 
 Adds per-side job status, automatic stale-job requeue, visible errors, and Retry / Clear Job controls. See `V8-3-UPGRADE.md`.
+
+
+## v8.4 S&S Activewear Live Inventory
+
+Adds credential testing, automatic product matching, warehouse inventory, pricing, and estimated garment cost. See `V8-4-SS-INVENTORY.md`.

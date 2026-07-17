@@ -34,11 +34,14 @@
   <p class="muted">Built from the selected production date. Review quantities before any future S&S submission.</p>
   <div class="row">
     <button onclick="loadSsDraft()">Build / Refresh Draft</button>
+    <button onclick="refreshAllSsInventory()">Refresh All S&S Inventory</button>
+    <button class="secondary" onclick="testSsConnection()">Test S&S Connection</button>
     <button class="secondary" onclick="saveSsDraft()">Save Draft Changes</button>
     <button class="secondary" onclick="reviewSsDraft()">Mark Draft Reviewed</button>
     <button onclick="printOutOfStockReport()">Print Out-of-Stock / Buy Elsewhere Report</button>
     <button class="danger" onclick="submitSsDraft()">Submit to S&S — Disabled</button>
   </div>
+  <div id="ssConnection"></div>
   <div id="ssDraftSummary"></div>
   <div id="ssDraft">No S&S draft built.</div>
 </section>
@@ -402,17 +405,43 @@ function ssDraftRow(item){
     ['out_of_stock','Out of Stock']
   ];
 
+  const warehouseText=(item.warehouses||[])
+    .map(warehouse=>`${warehouse.warehouseAbbr}: ${warehouse.qty}`)
+    .join(' | ');
+
+  const inventoryClass=item.inventoryError
+    ? 'error'
+    : item.stockStatus==='in_stock'
+      ? 'success'
+      : item.stockStatus==='partial'
+        ? 'warning'
+        : item.stockStatus==='out_of_stock'
+          ? 'error'
+          : 'muted';
+
   return `<tr data-line-id="${escapeHtml(item.lineId)}">
-    <td><input class="ss-sku" value="${escapeHtml(item.supplierSku)}" style="width:145px"></td>
+    <td>
+      <input class="ss-sku" value="${escapeHtml(item.supplierSku)}" style="width:145px">
+      <button class="secondary mini" onclick="refreshSsLine('${escapeHtml(item.lineId)}')">Refresh</button>
+      ${item.matchMethod?`<div class="muted small">${escapeHtml(item.matchMethod)}</div>`:''}
+    </td>
     <td>${escapeHtml(item.style)}</td>
     <td>${escapeHtml(item.color)}</td>
     <td>${escapeHtml(item.size)}</td>
     <td>${escapeHtml(item.type)}</td>
     <td>${item.requiredQty}</td>
-    <td><input class="ss-onhand" type="number" min="0" value="${item.onHandQty}" style="width:70px"></td>
+    <td><input class="ss-onhand" type="number" min="0" value="${item.onHandQty}" style="width:70px" onchange="recalculateSsRow(this)"></td>
     <td><input class="ss-orderqty" type="number" min="0" value="${item.orderQty}" style="width:70px"></td>
-    <td><select class="ss-stock">${statuses.map(([value,label])=>`<option value="${value}" ${item.stockStatus===value?'selected':''}>${label}</option>`).join('')}</select></td>
-    <td><input class="ss-available" type="number" min="0" value="${item.availableQty??''}" style="width:70px"></td>
+    <td>
+      <select class="ss-stock">${statuses.map(([value,label])=>`<option value="${value}" ${item.stockStatus===value?'selected':''}>${label}</option>`).join('')}</select>
+      <div class="${inventoryClass} small">${item.inventoryError?escapeHtml(item.inventoryError):''}</div>
+    </td>
+    <td>
+      <input class="ss-available" type="number" min="0" value="${item.availableQty??''}" style="width:70px" readonly>
+      <div class="muted small">${escapeHtml(warehouseText||'Not checked')}</div>
+    </td>
+    <td>${item.customerPrice===null||item.customerPrice===undefined?'—':'$'+Number(item.customerPrice).toFixed(2)}</td>
+    <td>${item.estimatedCost===null||item.estimatedCost===undefined?'—':'$'+Number(item.estimatedCost).toFixed(2)}</td>
     <td><input class="ss-alt" value="${escapeHtml(item.alternateSupplier||'')}" style="width:130px"></td>
     <td><input class="ss-notes" value="${escapeHtml(item.notes)}" style="width:150px"></td>
   </tr>`;
@@ -428,6 +457,9 @@ async function loadSsDraft(){
   }
 
   currentSsDraft=data.draft;
+  ssConnection.innerHTML=data.configuration?.configured
+    ? `<div class="success">✓ S&S credentials configured • Account ${escapeHtml(data.configuration.accountNumberMasked)}${data.configuration.warehouses?.length?' • Warehouses '+escapeHtml(data.configuration.warehouses.join(', ')):' • All warehouses'}</div>`
+    : `<div class="error">S&S is not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY in Railway Variables.</div>`;
   ssDraftSummary.innerHTML=`
     <div class="cards">
       <div class="metric"><span class="muted">Draft Lines</span><br><b>${data.summary.lines}</b></div>
@@ -436,6 +468,9 @@ async function loadSsDraft(){
       <div class="metric"><span class="muted">Order Qty</span><br><b>${data.summary.orderQty}</b></div>
       <div class="metric"><span class="muted">Out-of-Stock Lines</span><br><b>${data.summary.outOfStockLines||0}</b></div>
       <div class="metric"><span class="muted">Buy Elsewhere Qty</span><br><b>${data.summary.outOfStockQty||0}</b></div>
+      <div class="metric"><span class="muted">Matched Lines</span><br><b>${data.summary.matchedLines||0}</b></div>
+      <div class="metric"><span class="muted">Match Errors</span><br><b>${data.summary.inventoryErrorLines||0}</b></div>
+      <div class="metric"><span class="muted">Estimated S&S Cost</span><br><b>$${Number(data.summary.estimatedCost||0).toFixed(2)}</b></div>
     </div>
     <p class="${data.summary.missingSupplierSku?'error':'success'}">
       ${data.summary.missingSupplierSku
@@ -446,7 +481,7 @@ async function loadSsDraft(){
 
   ssDraft.innerHTML=currentSsDraft.items.length
     ? `<table id="ssDraftTable">
-        <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Required</th><th>On Hand</th><th>Order</th><th>S&S Stock</th><th>Available</th><th>Buy Elsewhere</th><th>Notes</th></tr>
+        <tr><th>S&S SKU</th><th>Style</th><th>Color</th><th>Size</th><th>Type</th><th>Required</th><th>On Hand</th><th>Order</th><th>S&S Stock</th><th>Available / Warehouses</th><th>Unit Cost</th><th>Est. Cost</th><th>Buy Elsewhere</th><th>Notes</th></tr>
         ${currentSsDraft.items.map(ssDraftRow).join('')}
       </table>`
     : '<p>No garment lines for this date.</p>';
@@ -569,6 +604,78 @@ async function submitSsDraft(){
   });
   const data=await response.json();
   msg.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+}
+
+
+function recalculateSsRow(input){
+  const row=input.closest('tr[data-line-id]');
+  if(!row)return;
+  const index=[...document.querySelectorAll('#ssDraftTable tr[data-line-id]')].indexOf(row);
+  const item=currentSsDraft?.items?.[index];
+  if(!item)return;
+
+  const onHand=Math.max(0,Number(row.querySelector('.ss-onhand').value||0));
+  row.querySelector('.ss-orderqty').value=Math.max(0,Number(item.requiredQty||0)-onHand);
+}
+
+async function testSsConnection(){
+  ssConnection.innerHTML='<div class="muted">Testing S&S connection…</div>';
+  const response=await fetch('/api/manager/ss/test',{method:'POST'});
+  const data=await response.json();
+
+  ssConnection.innerHTML=response.ok
+    ? `<div class="success">✓ ${escapeHtml(data.message)} Records returned: ${data.returnedRecords}. API requests remaining: ${escapeHtml(data.rateLimitRemaining??'unknown')}.</div>`
+    : `<div class="error">${escapeHtml(data.error)}</div>`;
+}
+
+async function refreshAllSsInventory(){
+  if(!currentSsDraft)await loadSsDraft();
+  if(!currentSsDraft)return;
+
+  await saveSsDraft();
+  ssConnection.innerHTML='<div class="muted">Matching garments and checking live S&S inventory…</div>';
+
+  const response=await fetch('/api/manager/ss-draft/refresh-inventory',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:date.value,fresh:true})
+  });
+  const data=await response.json();
+
+  if(!response.ok){
+    ssConnection.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return;
+  }
+
+  const failures=(data.results||[]).filter(result=>!result.success).length;
+  ssConnection.innerHTML=failures
+    ? `<div class="error">Inventory refresh completed with ${failures} unmatched line(s). Enter their S&S SKU manually and click Refresh on that line.</div>`
+    : `<div class="success">✓ All ${data.results.length} garment line(s) refreshed. API requests remaining: ${escapeHtml(data.rateLimitRemaining??'unknown')}.</div>`;
+
+  await loadSsDraft();
+}
+
+async function refreshSsLine(lineId){
+  const rows=[...document.querySelectorAll('#ssDraftTable tr[data-line-id]')];
+  const row=rows.find(entry=>entry.dataset.lineId===lineId);
+  if(!row)return;
+
+  const response=await fetch('/api/manager/ss-draft/line/'+encodeURIComponent(lineId)+'/refresh',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      date:date.value,
+      supplierSku:row.querySelector('.ss-sku').value.trim(),
+      onHandQty:Number(row.querySelector('.ss-onhand').value||0)
+    })
+  });
+  const data=await response.json();
+
+  ssConnection.innerHTML=response.ok
+    ? `<div class="success">✓ S&S line refreshed. API requests remaining: ${escapeHtml(data.rateLimitRemaining??'unknown')}.</div>`
+    : `<div class="error">${escapeHtml(data.error)}</div>`;
+
+  await loadSsDraft();
 }
 
 
