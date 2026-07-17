@@ -481,6 +481,62 @@ printerRouter.post("/agent/dry-run-jobs/:jobId/complete", (req, res) => {
 });
 
 
+
+const GRAPHICS_LAB_JOB_TIMEOUT_MS = Number(
+  process.env.GRAPHICS_LAB_JOB_TIMEOUT_MS || 45000
+);
+
+function expireStaleGraphicsLabJobs() {
+  const now = Date.now();
+
+  for (const job of runtimeStore.graphicsLabOpenJobs) {
+    if (job.status !== "processing") continue;
+
+    const startedAt = new Date(
+      job.processingAt || job.queuedAt || 0
+    ).getTime();
+
+    if (!startedAt || now - startedAt < GRAPHICS_LAB_JOB_TIMEOUT_MS) {
+      continue;
+    }
+
+    job.status = "queued";
+    job.processingAt = null;
+    job.requeuedAt = new Date().toISOString();
+    job.retryCount = Number(job.retryCount || 0) + 1;
+    job.error = "The local agent did not complete this request before the timeout. It was returned to the queue automatically.";
+  }
+}
+
+function latestGraphicsLabJob(pieceId, side) {
+  expireStaleGraphicsLabJobs();
+
+  return runtimeStore.graphicsLabOpenJobs
+    .filter((job) => job.pieceId === pieceId && job.side === side)
+    .sort((a, b) => {
+      const aTime = new Date(a.queuedAt || 0).getTime();
+      const bTime = new Date(b.queuedAt || 0).getTime();
+      return bTime - aTime;
+    })[0] || null;
+}
+
+function publicGraphicsLabJob(job) {
+  if (!job) return null;
+
+  return {
+    id: job.id,
+    side: job.side,
+    status: job.status,
+    queuedAt: job.queuedAt || null,
+    processingAt: job.processingAt || null,
+    completedAt: job.completedAt || null,
+    requeuedAt: job.requeuedAt || null,
+    retryCount: Number(job.retryCount || 0),
+    error: job.error || null,
+    artworkFilename: job.artworkFilename || null
+  };
+}
+
 function graphicsLabStatus(piece) {
   if (!runtimeStore.graphicsLabPieceStatus[piece.pieceId]) {
     runtimeStore.graphicsLabPieceStatus[piece.pieceId] = {
@@ -506,7 +562,11 @@ function graphicsLabStatus(piece) {
   return {
     ...status,
     requiresBack: Boolean(piece.requiresBack),
-    pieceComplete: Boolean(frontPrinted && backPrinted)
+    pieceComplete: Boolean(frontPrinted && backPrinted),
+    jobs: {
+      front: publicGraphicsLabJob(latestGraphicsLabJob(piece.pieceId, "front")),
+      back: publicGraphicsLabJob(latestGraphicsLabJob(piece.pieceId, "back"))
+    }
   };
 }
 
@@ -540,8 +600,11 @@ printerRouter.post("/piece/:pieceId/open-graphics-lab", (req, res) => {
     return res.status(400).json({ error: `${side} artwork is missing.` });
   }
 
+  expireStaleGraphicsLabJobs();
+
   const active = runtimeStore.graphicsLabOpenJobs.find(
-    (job) => job.pieceId === piece.pieceId &&
+    (job) =>
+      job.pieceId === piece.pieceId &&
       job.side === side &&
       ["queued", "processing"].includes(job.status)
   );
@@ -549,8 +612,9 @@ printerRouter.post("/piece/:pieceId/open-graphics-lab", (req, res) => {
   if (active) {
     return res.json({
       success: true,
-      message: `${side} artwork is already being opened.`,
-      job: active
+      alreadyActive: true,
+      message: `${side} artwork already has an active ${active.status} request.`,
+      job: publicGraphicsLabJob(active)
     });
   }
 
@@ -565,6 +629,9 @@ printerRouter.post("/piece/:pieceId/open-graphics-lab", (req, res) => {
     process: piece.process,
     status: "queued",
     queuedAt: new Date().toISOString(),
+    processingAt: null,
+    completedAt: null,
+    retryCount: 0,
     error: null
   };
 
@@ -626,10 +693,52 @@ printerRouter.post("/piece/:pieceId/reset-graphics-lab", (req, res) => {
   res.json({ success: true, status: graphicsLabStatus(piece) });
 });
 
+
+printerRouter.post("/piece/:pieceId/retry-graphics-lab", (req, res) => {
+  const piece = findPiece(req.params.pieceId);
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  const side = String(req.body?.side || "").toLowerCase();
+  if (!["front", "back"].includes(side)) {
+    return res.status(400).json({ error: "Side must be front or back." });
+  }
+
+  if (side === "back" && !piece.requiresBack) {
+    return res.status(400).json({ error: "This piece does not require a back print." });
+  }
+
+  let cleared = 0;
+
+  for (const job of runtimeStore.graphicsLabOpenJobs) {
+    if (
+      job.pieceId === piece.pieceId &&
+      job.side === side &&
+      ["queued", "processing"].includes(job.status)
+    ) {
+      job.status = "cancelled";
+      job.completedAt = new Date().toISOString();
+      job.error = "Cancelled for manual retry.";
+      cleared += 1;
+    }
+  }
+
+  const status = graphicsLabStatus(piece);
+  status[side].openedAt = null;
+
+  res.json({
+    success: true,
+    message: `${side} Graphics Lab request reset. You can open it again now.`,
+    cleared,
+    status: graphicsLabStatus(piece)
+  });
+});
+
 printerRouter.get("/agent/graphics-lab-open-jobs", (req, res) => {
   if (req.query.token !== config.agentToken) {
     return res.status(401).json({ error: "Unauthorized agent token." });
   }
+
+  expireStaleGraphicsLabJobs();
 
   const jobs = runtimeStore.graphicsLabOpenJobs.filter(
     (job) => job.status === "queued"
@@ -638,6 +747,7 @@ printerRouter.get("/agent/graphics-lab-open-jobs", (req, res) => {
   for (const job of jobs) {
     job.status = "processing";
     job.processingAt = new Date().toISOString();
+    job.error = null;
   }
 
   res.json(jobs);

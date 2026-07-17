@@ -52,3 +52,5 @@ pre{background:#0f1420;border:1px solid #29354d;border-radius:10px;padding:12px;
 .piece-complete{background:#166534;color:#fff;border-radius:14px;padding:18px;text-align:center;font-size:24px;font-weight:900}
 .piece-incomplete{background:#1e293b;border-radius:14px;padding:16px;text-align:center;font-size:18px;font-weight:800}
 button:disabled{opacity:.45;cursor:not-allowed}
+
+.error.compact{padding:9px 11px;margin:8px 0;font-size:13px}

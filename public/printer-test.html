@@ -286,7 +286,7 @@ async function loadDryRunStatus(){
 }
 
 
-function glSideCard(side, required, lookupResult, state){
+function glSideCard(side, required, lookupResult, state, job){
   const title=side==='front'?'Front':'Back';
 
   if(!required){
@@ -299,6 +299,17 @@ function glSideCard(side, required, lookupResult, state){
   const found=Boolean(lookupResult?.found);
   const opened=Boolean(state?.openedAt);
   const printed=Boolean(state?.printedAt);
+  const jobStatus=job?.status||'none';
+  const active=['queued','processing'].includes(jobStatus);
+  const failed=jobStatus==='error';
+  const retryCount=Number(job?.retryCount||0);
+
+  let jobLine='No request sent.';
+  if(jobStatus==='queued') jobLine='Waiting for the local agent.';
+  if(jobStatus==='processing') jobLine='Local agent is processing this request.';
+  if(jobStatus==='opened') jobLine='Artwork import completed.';
+  if(jobStatus==='error') jobLine='Last import failed.';
+  if(jobStatus==='cancelled') jobLine='Previous request was cancelled.';
 
   return `<div class="gl-side ${printed?'done':''}">
     <h3>${title} ${printed?'✓':''}</h3>
@@ -306,8 +317,16 @@ function glSideCard(side, required, lookupResult, state){
     <p><b>Found:</b> ${found?'Yes':'No'}</p>
     <p><b>Opened:</b> ${opened?new Date(state.openedAt).toLocaleString():'No'}</p>
     <p><b>Printed:</b> ${printed?new Date(state.printedAt).toLocaleString():'No'}</p>
+    <p><b>Import job:</b> ${escapeHtml(jobStatus)}</p>
+    <p class="muted">${escapeHtml(jobLine)}${retryCount?` Automatic retries: ${retryCount}.`:''}</p>
+    ${job?.error?`<div class="error compact">${escapeHtml(job.error)}</div>`:''}
     <div class="row">
-      <button ${found?'':'disabled'} onclick="openGraphicsLab('${side}')">Open ${title} in Graphics Lab</button>
+      <button ${found&&!active?'':'disabled'} onclick="openGraphicsLab('${side}')">
+        ${opened?'Open '+title+' Again':'Open '+title+' in Graphics Lab'}
+      </button>
+      <button class="secondary" ${active||failed||jobStatus==='cancelled'?'':'disabled'} onclick="retryGraphicsLab('${side}')">
+        Retry / Clear Job
+      </button>
       <button class="secondary" onclick="markGraphicsPrinted('${side}',${printed?'false':'true'})">
         ${printed?'Clear Printed':'Mark '+title+' Printed'}
       </button>
@@ -341,8 +360,8 @@ async function loadGraphicsLabStation(){
       <div><span>Garment</span><b>${escapeHtml(currentPiece.style||currentPiece.garment)} / ${escapeHtml(currentPiece.color)} / ${escapeHtml(currentPiece.size)}</b></div>
     </div>
     <div class="gl-sides">
-      ${glSideCard('front',true,currentLookup?.front,data.front)}
-      ${glSideCard('back',currentPiece.requiresBack,currentLookup?.back,data.back)}
+      ${glSideCard('front',true,currentLookup?.front,data.front,data.jobs?.front)}
+      ${glSideCard('back',currentPiece.requiresBack,currentLookup?.back,data.back,data.jobs?.back)}
     </div>
     <button class="danger" onclick="resetGraphicsLabStation()">Reset This Piece</button>`;
 
@@ -377,6 +396,25 @@ async function openGraphicsLab(side){
     : '<div class="error">'+escapeHtml(data.error)+'</div>';
 
   setTimeout(loadGraphicsLabStation,1200);
+}
+
+
+async function retryGraphicsLab(side){
+  const response=await fetch(
+    '/api/printer/piece/'+encodeURIComponent(currentPiece.pieceId)+'/retry-graphics-lab',
+    {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({side})
+    }
+  );
+  const data=await response.json();
+
+  message.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  await loadGraphicsLabStation();
 }
 
 async function markGraphicsPrinted(side,printed){
@@ -450,6 +488,24 @@ function renderLookup(lookup){
       ${artCard('Back',lookup.back,currentPiece?.requiresBack,'back')}
     </div>`;
 }
+
+let graphicsLabStatusPoll=null;
+
+function startGraphicsLabStatusPolling(){
+  clearInterval(graphicsLabStatusPoll);
+  graphicsLabStatusPoll=setInterval(async()=>{
+    if(!currentPiece)return;
+    try{
+      await loadGraphicsLabStation();
+    }catch(error){
+      console.warn('Graphics Lab status refresh failed:',error);
+    }
+  },2000);
+}
+
+startGraphicsLabStatusPolling();
+
+
 </script>
 </body>
 </html>

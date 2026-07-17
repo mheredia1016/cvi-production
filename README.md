@@ -282,3 +282,8 @@ Brother SDK direct printing remains disabled.
 ## v8.1 Auto-Detect Local Agent
 
 Local computers normally require only `SERVER_URL` and `AGENT_TOKEN`. Use `SETUP-LOCAL-AGENT.cmd`, `CHECK-LOCAL-AGENT.cmd`, and `START-PRODUCTIONOS-AGENT.cmd` for Windows setup and diagnostics.
+
+
+## v8.3 Graphics Lab Retry Reliability
+
+Adds per-side job status, automatic stale-job requeue, visible errors, and Retry / Clear Job controls. See `V8-3-UPGRADE.md`.
