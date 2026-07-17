@@ -1,20 +1,138 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Settings</title><link rel="stylesheet" href="/styles.css"></head><body><div class="layout"><aside class="side"><div class="brand">ProductionOS</div><a href="/daily.html" class="">📋 Daily Manager</a><a href="/stores.html" class="">🏪 Stores</a><a href="/settings.html" class="active">⚙️ Settings</a><a href="/test-barcode.html">🏷️ Test Barcode</a><a href="/printer-test.html">🖨️ Printer Scan Test</a><a href="/history.html" class="">🖨️ Print History</a></aside><main class="main"><div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
-<h1>Production Settings</h1>
-<section class="card">
-  <h2>Manager Label Print Order</h2>
-  <p class="muted">One category per line. Rush should normally stay first.</p>
-  <textarea id="printOrder" style="width:100%;min-height:320px;background:#0f1420;color:#fff;border:1px solid #36435f;border-radius:10px;padding:12px"></textarea>
-  <br><br>
-  <button onclick="save()">Save Print Order</button>
-  <div id="msg"></div>
-</section>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Settings</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">ProductionOS</div>
+    <a href="/daily.html">📋 Daily Manager</a>
+    <a href="/stores.html">🏪 Stores</a>
+    <a href="/settings.html" class="active">⚙️ Settings</a>
+    <a href="/test-barcode.html">🏷️ Test Barcode</a>
+    <a href="/printer-test.html">🖨️ Printer Scan Test</a>
+    <a href="/history.html">🖨️ Print History</a>
+  </aside>
+  <main class="main">
+    <div class="shadow">SHADOW MODE — Read-only. Linx remains in control.</div>
+    <h1>Production Settings</h1>
+
+    <section class="card">
+      <h2>Blank Garment Mappings</h2>
+      <p class="muted">
+        Connect the garment name from ShipStation to the S&S brand and style.
+        ProductionOS will then find the exact color and size variant automatically.
+      </p>
+
+      <div class="table-wrap">
+        <table id="mappingTable">
+          <thead>
+            <tr>
+              <th>Production Garment Name</th>
+              <th>S&S Brand</th>
+              <th>S&S Style</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="row">
+        <button onclick="addMappingRow()">Add Mapping</button>
+        <button onclick="saveMappings()">Save Mappings</button>
+      </div>
+
+      <div id="mappingMsg"></div>
+
+      <details style="margin-top:18px">
+        <summary>Railway persistence JSON</summary>
+        <p class="muted">
+          Settings entered here remain active until Railway restarts. To preserve them through
+          deployments, copy the JSON below into the Railway variable
+          <code>SS_GARMENT_MAPPINGS_JSON</code>.
+        </p>
+        <textarea id="mappingJson" readonly style="width:100%;min-height:130px;background:#0f1420;color:#fff;border:1px solid #36435f;border-radius:10px;padding:12px"></textarea>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Manager Label Print Order</h2>
+      <p class="muted">One category per line. Rush should normally stay first.</p>
+      <textarea id="printOrder" style="width:100%;min-height:320px;background:#0f1420;color:#fff;border:1px solid #36435f;border-radius:10px;padding:12px"></textarea>
+      <br><br>
+      <button onclick="savePrintOrder()">Save Print Order</button>
+      <div id="printMsg"></div>
+    </section>
+
 <script>
-async function load(){
-  const data=await (await fetch('/api/settings')).json();
-  printOrder.value=(data.printOrder||[]).join('\n');
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>"']/g,char=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  })[char]);
 }
 
-async function save(){
+function mappingRow(mapping={}){
+  return `<tr>
+    <td><input class="map-name" value="${escapeHtml(mapping.garmentName||'')}" placeholder="Basic Unisex Heavy Cotton T-Shirt" style="width:100%"></td>
+    <td><input class="map-brand" value="${escapeHtml(mapping.brand||'')}" placeholder="Gildan" style="width:100%"></td>
+    <td><input class="map-style" value="${escapeHtml(mapping.style||'')}" placeholder="5000" style="width:100%"></td>
+    <td><button class="secondary" onclick="this.closest('tr').remove()">Remove</button></td>
+  </tr>`;
+}
+
+function addMappingRow(mapping={}){
+  document.querySelector('#mappingTable tbody').insertAdjacentHTML('beforeend',mappingRow(mapping));
+}
+
+function collectMappings(){
+  return [...document.querySelectorAll('#mappingTable tbody tr')]
+    .map(row=>({
+      garmentName:row.querySelector('.map-name').value.trim(),
+      brand:row.querySelector('.map-brand').value.trim(),
+      style:row.querySelector('.map-style').value.trim()
+    }))
+    .filter(mapping=>mapping.garmentName&&mapping.style);
+}
+
+async function load(){
+  const [settingsResponse,mappingsResponse]=await Promise.all([
+    fetch('/api/settings'),
+    fetch('/api/settings/ss-garment-mappings')
+  ]);
+
+  const settings=await settingsResponse.json();
+  const mappingData=await mappingsResponse.json();
+
+  printOrder.value=(settings.printOrder||[]).join('\n');
+
+  document.querySelector('#mappingTable tbody').innerHTML='';
+  (mappingData.mappings||[]).forEach(addMappingRow);
+  if(!(mappingData.mappings||[]).length)addMappingRow();
+
+  mappingJson.value=JSON.stringify(mappingData.mappings||[]);
+}
+
+async function saveMappings(){
+  const mappings=collectMappings();
+  const response=await fetch('/api/settings/ss-garment-mappings',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({mappings})
+  });
+  const data=await response.json();
+
+  mappingJson.value=data.exportJson||JSON.stringify(data.mappings||[]);
+  mappingMsg.innerHTML=response.ok
+    ? `<div class="success">✓ Saved ${data.mappings.length} garment mapping(s). Refresh the S&S inventory draft now.</div>`
+    : `<div class="error">${escapeHtml(data.error||'Could not save mappings.')}</div>`;
+}
+
+async function savePrintOrder(){
   const order=printOrder.value.split('\n').map(value=>value.trim()).filter(Boolean);
 
   const response=await fetch('/api/settings/print-order',{
@@ -24,8 +142,12 @@ async function save(){
   });
   const data=await response.json();
 
-  msg.innerHTML='<div class="success">✓ Saved '+data.printOrder.length+' categories.</div>';
+  printMsg.innerHTML='<div class="success">✓ Saved '+data.printOrder.length+' categories.</div>';
 }
+
 load();
 </script>
-</main></div></body></html>
+  </main>
+</div>
+</body>
+</html>

@@ -1,6 +1,10 @@
 
 import express from "express";
 import { runtimeStore } from "../services/runtimeStore.js";
+import {
+  listSsGarmentMappings,
+  saveSsGarmentMappings
+} from "../services/ssGarmentMappings.js";
 
 export const settingsRouter = express.Router();
 
@@ -18,5 +22,23 @@ settingsRouter.post("/print-order", (req, res) => {
   res.json({
     success: true,
     printOrder
+  });
+});
+
+
+settingsRouter.get("/ss-garment-mappings", (req, res) => {
+  res.json({
+    mappings: listSsGarmentMappings(),
+    persistentVariable: "SS_GARMENT_MAPPINGS_JSON"
+  });
+});
+
+settingsRouter.post("/ss-garment-mappings", (req, res) => {
+  const mappings = saveSsGarmentMappings(req.body?.mappings);
+
+  res.json({
+    success: true,
+    mappings,
+    exportJson: JSON.stringify(mappings)
   });
 });

@@ -227,7 +227,14 @@ export async function getSsProductBySku(sku, { fresh = false } = {}) {
   return value;
 }
 
-export async function matchSsProduct({ supplierSku, style, color, size, fresh = false }) {
+export async function matchSsProduct({
+  supplierSku,
+  style,
+  brand = "",
+  color,
+  size,
+  fresh = false
+}) {
   if (supplierSku) {
     try {
       return await getSsProductBySku(supplierSku, { fresh });
@@ -247,6 +254,8 @@ export async function matchSsProduct({ supplierSku, style, color, size, fresh = 
   const normalizedColor = normalize(color);
   const normalizedSize = normalizeSize(size);
 
+  const normalizedBrand = normalize(brand);
+
   const candidates = products.filter((product) => {
     const productStyle = normalize(product.styleName);
     const styleMatches =
@@ -254,7 +263,14 @@ export async function matchSsProduct({ supplierSku, style, color, size, fresh = 
       productStyle.includes(normalizedStyle) ||
       normalizedStyle.includes(productStyle);
 
+    const brandMatches =
+      !normalizedBrand ||
+      normalize(product.brandName) === normalizedBrand ||
+      normalize(product.brandName).includes(normalizedBrand) ||
+      normalizedBrand.includes(normalize(product.brandName));
+
     return styleMatches &&
+      brandMatches &&
       normalize(product.colorName) === normalizedColor &&
       normalizeSize(product.sizeName) === normalizedSize;
   });
@@ -275,13 +291,13 @@ export async function matchSsProduct({ supplierSku, style, color, size, fresh = 
     }
 
     throw new Error(
-      `No exact S&S match for ${style} / ${color} / ${size}. Enter the S&S SKU manually and refresh that line.`
+      `No exact S&S match for ${brand ? brand + " " : ""}${style} / ${color} / ${size}. Check the blank garment mapping or enter the S&S variant SKU manually.`
     );
   }
 
   if (candidates.length > 1) {
     throw new Error(
-      `Multiple S&S matches found for ${style} / ${color} / ${size}. Enter the S&S SKU manually.`
+      `Multiple S&S matches found for ${brand ? brand + " " : ""}${style} / ${color} / ${size}. Enter the S&S variant SKU manually.`
     );
   }
 

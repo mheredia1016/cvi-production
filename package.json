@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v8-4-ss-inventory",
-  "version": "8.4.0",
+  "name": "productionos-v8-5-ss-garment-mappings",
+  "version": "8.5.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

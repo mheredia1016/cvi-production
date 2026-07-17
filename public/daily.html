@@ -425,7 +425,10 @@ function ssDraftRow(item){
       <button class="secondary mini" onclick="refreshSsLine('${escapeHtml(item.lineId)}')">Refresh</button>
       ${item.matchMethod?`<div class="muted small">${escapeHtml(item.matchMethod)}</div>`:''}
     </td>
-    <td>${escapeHtml(item.style)}</td>
+    <td>
+      ${escapeHtml(item.style)}
+      ${item.mappedStyle?`<div class="success small">Mapped: ${escapeHtml(item.mappedBrand)} ${escapeHtml(item.mappedStyle)}</div>`:`<div class="error small">No garment mapping</div>`}
+    </td>
     <td>${escapeHtml(item.color)}</td>
     <td>${escapeHtml(item.size)}</td>
     <td>${escapeHtml(item.type)}</td>
@@ -468,7 +471,8 @@ async function loadSsDraft(){
       <div class="metric"><span class="muted">Order Qty</span><br><b>${data.summary.orderQty}</b></div>
       <div class="metric"><span class="muted">Out-of-Stock Lines</span><br><b>${data.summary.outOfStockLines||0}</b></div>
       <div class="metric"><span class="muted">Buy Elsewhere Qty</span><br><b>${data.summary.outOfStockQty||0}</b></div>
-      <div class="metric"><span class="muted">Matched Lines</span><br><b>${data.summary.matchedLines||0}</b></div>
+      <div class="metric"><span class="muted">Mapped Garments</span><br><b>${data.summary.mappedLines||0}</b></div>
+      <div class="metric"><span class="muted">Matched Variants</span><br><b>${data.summary.matchedLines||0}</b></div>
       <div class="metric"><span class="muted">Match Errors</span><br><b>${data.summary.inventoryErrorLines||0}</b></div>
       <div class="metric"><span class="muted">Estimated S&S Cost</span><br><b>$${Number(data.summary.estimatedCost||0).toFixed(2)}</b></div>
     </div>
@@ -561,7 +565,10 @@ async function printOutOfStockReport(){
     const buyQty=Math.max(0,Number(item.orderQty||0)-available);
     return `<tr>
       <td>${escapeHtml(item.supplierSku)}</td>
-      <td>${escapeHtml(item.style)}</td>
+      <td>
+      ${escapeHtml(item.style)}
+      ${item.mappedStyle?`<div class="success small">Mapped: ${escapeHtml(item.mappedBrand)} ${escapeHtml(item.mappedStyle)}</div>`:`<div class="error small">No garment mapping</div>`}
+    </td>
       <td>${escapeHtml(item.color)}</td>
       <td>${escapeHtml(item.size)}</td>
       <td>${escapeHtml(item.type)}</td>
@@ -649,7 +656,7 @@ async function refreshAllSsInventory(){
 
   const failures=(data.results||[]).filter(result=>!result.success).length;
   ssConnection.innerHTML=failures
-    ? `<div class="error">Inventory refresh completed with ${failures} unmatched line(s). Enter their S&S SKU manually and click Refresh on that line.</div>`
+    ? `<div class="error">Inventory refresh completed with ${failures} unmatched line(s). Check the garment mapping under Settings, or enter an exact S&S variant SKU.</div>`
     : `<div class="success">✓ All ${data.results.length} garment line(s) refreshed. API requests remaining: ${escapeHtml(data.rateLimitRemaining??'unknown')}.</div>`;
 
   await loadSsDraft();

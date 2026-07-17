@@ -27,6 +27,9 @@ export function buildSsDraft(garmentRows, date) {
       ssStyleName: "",
       ssColorName: "",
       ssSizeName: "",
+      mappedBrand: "",
+      mappedStyle: "",
+      mappingName: "",
       matchMethod: "",
       inventoryCheckedAt: null,
       inventoryError: "",
@@ -43,7 +46,12 @@ export function summarizeSsDraft(draft) {
     requiredQty: items.reduce((sum, item) => sum + Number(item.requiredQty || 0), 0),
     onHandQty: items.reduce((sum, item) => sum + Number(item.onHandQty || 0), 0),
     orderQty: items.reduce((sum, item) => sum + Number(item.orderQty || 0), 0),
-    missingSupplierSku: items.filter((item) => !String(item.supplierSku || "").trim()).length,
+    missingSupplierSku: items.filter(
+      (item) =>
+        !String(item.supplierSku || "").trim() &&
+        !String(item.mappedStyle || "").trim()
+    ).length,
+    mappedLines: items.filter((item) => String(item.mappedStyle || "").trim()).length,
     outOfStockLines: items.filter((item) => item.stockStatus === "out_of_stock").length,
     outOfStockQty: items
       .filter((item) => item.stockStatus === "out_of_stock")

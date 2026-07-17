@@ -14,6 +14,10 @@ import {
   ssConfigurationStatus,
   testSsConnection
 } from "../services/ssActivewear.js";
+import {
+  findSsGarmentMapping,
+  resolveSsLookup
+} from "../services/ssGarmentMappings.js";
 
 export const managerRouter = express.Router();
 
@@ -285,9 +289,11 @@ managerRouter.post("/ss/cache/clear", (req, res) => {
 
 managerRouter.post("/ss/lookup", async (req, res) => {
   try {
+    const mapping = findSsGarmentMapping(req.body?.style);
     const result = await matchSsProduct({
       supplierSku: req.body?.supplierSku,
-      style: req.body?.style,
+      style: mapping?.style || req.body?.style,
+      brand: mapping?.brand || req.body?.brand || "",
       color: req.body?.color,
       size: req.body?.size,
       fresh: Boolean(req.body?.fresh)
@@ -313,15 +319,28 @@ managerRouter.post("/ss-draft/refresh-inventory", async (req, res) => {
 
   for (const item of draft.items || []) {
     try {
+      const lookup = resolveSsLookup(item);
+
+      if (!lookup.supplierSku && !lookup.mapping) {
+        throw new Error(
+          `No blank garment mapping exists for "${item.style}". Add one under Settings → Blank Garment Mappings.`
+        );
+      }
+
       const result = await matchSsProduct({
-        supplierSku: item.supplierSku,
-        style: item.style,
-        color: item.color,
-        size: item.size,
+        supplierSku: lookup.supplierSku,
+        style: lookup.style,
+        brand: lookup.brand,
+        color: lookup.color,
+        size: lookup.size,
         fresh
       });
 
       const product = result.product;
+
+      item.mappedBrand = lookup.mapping?.brand || product.brandName || "";
+      item.mappedStyle = lookup.mapping?.style || product.styleName || "";
+      item.mappingName = lookup.mapping?.garmentName || "";
       const orderQty = Math.max(
         0,
         Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
@@ -415,16 +434,29 @@ managerRouter.post("/ss-draft/line/:lineId/refresh", async (req, res) => {
   }
 
   try {
-    const result = item.supplierSku
-      ? await getSsProductBySku(item.supplierSku, { fresh: true })
+    const lookup = resolveSsLookup(item);
+
+    if (!lookup.supplierSku && !lookup.mapping) {
+      throw new Error(
+        `No blank garment mapping exists for "${item.style}". Add one under Settings → Blank Garment Mappings.`
+      );
+    }
+
+    const result = lookup.supplierSku
+      ? await getSsProductBySku(lookup.supplierSku, { fresh: true })
       : await matchSsProduct({
-          style: item.style,
-          color: item.color,
-          size: item.size,
+          style: lookup.style,
+          brand: lookup.brand,
+          color: lookup.color,
+          size: lookup.size,
           fresh: true
         });
 
     const product = result.product;
+
+    item.mappedBrand = lookup.mapping?.brand || product.brandName || "";
+    item.mappedStyle = lookup.mapping?.style || product.styleName || "";
+    item.mappingName = lookup.mapping?.garmentName || "";
     const orderQty = Math.max(
       0,
       Number(item.requiredQty || 0) - Number(item.onHandQty || 0)
@@ -487,12 +519,19 @@ managerRouter.get("/ss-draft", (req, res) => {
     runtimeStore.purchaseDrafts[date] = draft;
   }
 
+  for (const item of draft.items || []) {
+    const mapping = findSsGarmentMapping(item.style);
+    item.mappedBrand = mapping?.brand || item.mappedBrand || "";
+    item.mappedStyle = mapping?.style || item.mappedStyle || "";
+    item.mappingName = mapping?.garmentName || item.mappingName || "";
+  }
+
   res.json({
     draft,
     summary: summarizeSsDraft(draft),
     configuration: ssConfigurationStatus(),
     warning: config.ss.submitEnabled
-      ? "S&S credentials are active. Live order submission is not included in v8.4."
+      ? "S&S credentials are active. Live order submission is not included in v8.5."
       : "Live inventory is enabled when credentials are configured. Purchase-order submission remains disabled."
   });
 });
@@ -533,6 +572,9 @@ managerRouter.post("/ss-draft", (req, res) => {
     ssStyleName: String(item.ssStyleName || ""),
     ssColorName: String(item.ssColorName || ""),
     ssSizeName: String(item.ssSizeName || ""),
+    mappedBrand: String(item.mappedBrand || ""),
+    mappedStyle: String(item.mappedStyle || ""),
+    mappingName: String(item.mappingName || ""),
     matchMethod: String(item.matchMethod || ""),
     inventoryCheckedAt: item.inventoryCheckedAt || null,
     inventoryError: String(item.inventoryError || ""),

@@ -292,3 +292,8 @@ Adds per-side job status, automatic stale-job requeue, visible errors, and Retry
 ## v8.4 S&S Activewear Live Inventory
 
 Adds credential testing, automatic product matching, warehouse inventory, pricing, and estimated garment cost. See `V8-4-SS-INVENTORY.md`.
+
+
+## v8.5 S&S Blank Garment Mappings
+
+Maps production garment names to S&S brand/style before matching color and size. Includes Basic Unisex Heavy Cotton T-Shirt → Gildan 5000. See `V8-5-SS-GARMENT-MAPPINGS.md`.
