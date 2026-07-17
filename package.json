@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v8-6-ss-catalog-sync",
-  "version": "8.6.0",
+  "name": "productionos-v9-stable-foundation",
+  "version": "9.0.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

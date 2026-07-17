@@ -50,6 +50,11 @@
 
       <div id="mappingMsg"></div>
       <div id="catalogMsg"></div>
+      <div class="warning" style="margin-top:12px">
+        ProductionOS v9 saves mappings and the synced S&S catalog to
+        <code>PRODUCTIONOS_DATA_DIR</code>. Attach a Railway Volume at
+        <code>/data</code> and set <code>PRODUCTIONOS_DATA_DIR=/data</code>.
+      </div>
 
       <details style="margin-top:18px">
         <summary>Railway persistence JSON</summary>
@@ -149,7 +154,7 @@ async function syncCatalog(){
   const failed=(data.errors||[]).length;
 
   catalogMsg.innerHTML=response.ok
-    ? `<div class="success">✓ Synced ${data.synced.length} style(s) and ${synced} variants.</div>`
+    ? `<div class="success">✓ Synced ${data.synced.length} style(s) and ${synced} variants. ${data.synced.map(entry=>`${escapeHtml(entry.brand)} ${escapeHtml(entry.style)} → styleID ${escapeHtml(entry.styleID)}`).join(' • ')}</div>`
     : response.status===207
       ? `<div class="warning">Synced ${synced} variants; ${failed} style(s) failed.</div>`
       : `<div class="error">${escapeHtml(data.error||'Catalog sync failed.')}</div>`;

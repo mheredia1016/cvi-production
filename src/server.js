@@ -7,11 +7,18 @@ import { storesRouter, initializeEnabledStores } from "./routes/stores.js";
 import { managerRouter } from "./routes/manager.js";
 import { settingsRouter } from "./routes/settings.js";
 import { printerRouter } from "./routes/printer.js";
+import {
+  loadPersistentState,
+  persistentStateInfo,
+  startPersistentStateAutosave
+} from "./services/persistentState.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const persistentLoad = loadPersistentState();
 initializeEnabledStores();
+startPersistentStateAutosave();
 
 const app = express();
 
@@ -26,11 +33,15 @@ app.use("/api/printer", printerRouter);
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    service: "ProductionOS v8.6",
-    mode: "SHADOW"
+    service: "ProductionOS v9.0",
+    mode: "SHADOW",
+    persistentState: {
+      loaded: persistentLoad.loaded,
+      ...persistentStateInfo()
+    }
   });
 });
 
 app.listen(config.port, () => {
-  console.log(`ProductionOS v8.6 running on port ${config.port}`);
+  console.log(`ProductionOS v9.0 running on port ${config.port}`);
 });

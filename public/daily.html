@@ -470,7 +470,7 @@ async function loadSsDraft(){
 
   const catalog=data.catalog||{};
   ssCatalogStatus.innerHTML=catalog.syncedStyleCount
-    ? `<div class="success">✓ Local S&S catalog: ${catalog.syncedStyleCount} mapped style(s), ${catalog.variantCount} variants • Last sync: ${catalog.lastSyncAt?new Date(catalog.lastSyncAt).toLocaleString():'unknown'}</div>`
+    ? `<div class="success">✓ Local S&S catalog: ${catalog.syncedStyleCount} mapped style(s), ${catalog.variantCount} variants • ${catalog.styles?.map(entry=>`${escapeHtml(entry.brand)} ${escapeHtml(entry.style)} (styleID ${escapeHtml(entry.styleID)})`).join(' • ')} • Last sync: ${catalog.lastSyncAt?new Date(catalog.lastSyncAt).toLocaleString():'unknown'}</div>`
     : `<div class="warning">Local S&S catalog has not been synced. Click “Sync Mapped S&S Catalog” before refreshing inventory.</div>`;
 
   ssDraftSummary.innerHTML=`

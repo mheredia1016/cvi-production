@@ -42,6 +42,13 @@ export const runtimeStore = {
   graphicsJobs: [],
   dryRunPrintJobs: [],
   graphicsLabOpenJobs: [],
+  ssCatalog: {
+    styles: {},
+    lastSyncAt: null,
+    lastError: "",
+    syncedStyleCount: 0,
+    variantCount: 0
+  },
   graphicsLabPieceStatus: {},
   pieceCounter: 14540600,
   settings: {

@@ -302,3 +302,8 @@ Maps production garment names to S&S brand/style before matching color and size.
 ## v8.6 S&S Mapped Catalog Sync
 
 Corrects mapped style requests to use identifiers such as `Gildan 5000` and syncs all color/size variants for mapped blanks. See `V8-6-SS-CATALOG-SYNC.md`.
+
+
+# ProductionOS v9.0 Stable Foundation
+
+Adds the documented S&S style → styleID → product variant workflow and persistent Railway Volume storage. See `PRODUCTIONOS-V9-SETUP.md`.

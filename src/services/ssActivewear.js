@@ -1,9 +1,9 @@
 
 import { config } from "../config/config.js";
 import { runtimeStore } from "./runtimeStore.js";
+import { schedulePersistentSave } from "./persistentState.js";
 
-const styleCache = new Map();
-const skuCache = new Map();
+const requestCache = new Map();
 
 function credentialsConfigured() {
   return Boolean(config.ss.accountNumber && config.ss.apiKey);
@@ -18,6 +18,7 @@ function authHeader() {
 function normalize(value) {
   return String(value || "")
     .toLowerCase()
+    .replace(/&/g, "and")
     .replace(/\b(unisex|mens?|womens?|youth|adult)\b/g, "")
     .replace(/[^a-z0-9]+/g, "");
 }
@@ -38,69 +39,77 @@ function normalizeSize(value) {
     .replace(/^XXXXX-LARGE$/, "5XL")
     .replace(/^XXXXXX-LARGE$/, "6XL");
 
-  const xPrefix = clean.match(/^(X{2,6})L$/);
-  if (xPrefix) return `${xPrefix[1].length}XL`;
+  const repeatedX = clean.match(/^(X{2,6})L$/);
+  if (repeatedX) return `${repeatedX[1].length}XL`;
 
-  const xSuffix = clean.match(/^([2-6])X$/);
-  if (xSuffix) return `${xSuffix[1]}XL`;
+  const numericX = clean.match(/^([2-6])X$/);
+  if (numericX) return `${numericX[1]}XL`;
 
   return clean;
 }
 
+function normalizeColor(value) {
+  return normalize(
+    String(value || "")
+      .replace(/\bheathered\b/gi, "heather")
+      .replace(/\bsport grey\b/gi, "sport gray")
+  );
+}
 
 function styleIdentifier(style, brand = "") {
-  const cleanStyle = String(style || "").trim();
-  const cleanBrand = String(brand || "").trim();
-
-  if (!cleanBrand) return cleanStyle;
-
-  const normalizedStyle = normalize(cleanStyle);
-  const normalizedBrand = normalize(cleanBrand);
-
-  if (normalizedStyle.startsWith(normalizedBrand)) {
-    return cleanStyle;
-  }
-
-  return `${cleanBrand} ${cleanStyle}`.trim();
+  return `${String(brand || "").trim()} ${String(style || "").trim()}`.trim();
 }
 
 function catalogKey(style, brand = "") {
   return normalize(styleIdentifier(style, brand));
 }
 
-function getCatalogEntry(style, brand = "") {
-  return runtimeStore.ssCatalog.styles[catalogKey(style, brand)] || null;
-}
-
 function cacheValid(entry) {
-  if (!entry) return false;
-  return Date.now() - entry.at < config.ss.cacheMinutes * 60 * 1000;
+  return Boolean(
+    entry &&
+    Date.now() - entry.at < config.ss.cacheMinutes * 60 * 1000
+  );
 }
 
-async function ssRequest(path, options = {}) {
+function buildQuery(params = {}) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    query.set(key, Array.isArray(value) ? value.join(",") : String(value));
+  }
+
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
+async function ssRequest(pathname, { fresh = false } = {}) {
   if (!credentialsConfigured()) {
     throw new Error(
-      "S&S credentials are not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY in Railway."
+      "S&S credentials are not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY."
     );
   }
 
+  const cacheKey = pathname;
+  const cached = requestCache.get(cacheKey);
+
+  if (!fresh && cacheValid(cached)) return cached.value;
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), 25000);
 
   try {
-    const response = await fetch(`${config.ss.baseUrl}${path}`, {
-      ...options,
+    const response = await fetch(`${config.ss.baseUrl}${pathname}`, {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        Authorization: authHeader(),
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...(options.headers || {})
+        Authorization: authHeader()
       }
     });
 
     const raw = await response.text();
     let data = null;
+
     try {
       data = raw ? JSON.parse(raw) : null;
     } catch {
@@ -113,108 +122,189 @@ async function ssRequest(path, options = {}) {
         : "";
 
       throw new Error(
-        `S&S API ${response.status}: ${apiMessage || response.statusText || String(raw).slice(0, 300)}`
+        `S&S API ${response.status}: ${
+          apiMessage || response.statusText || String(raw).slice(0, 300)
+        }`
       );
     }
 
-    return {
+    const value = {
       data,
       rateLimitRemaining: response.headers.get("x-rate-limit-remaining")
     };
+
+    requestCache.set(cacheKey, { at: Date.now(), value });
+    return value;
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error("S&S API request timed out after 20 seconds.");
+      throw new Error("S&S API request timed out after 25 seconds.");
     }
+
     throw error;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function warehouseSummary(product) {
-  const allowed = new Set(config.ss.warehouses.map((value) => value.toUpperCase()));
-  const warehouses = (product?.warehouses || [])
-    .filter((warehouse) =>
-      allowed.size === 0 || allowed.has(String(warehouse.warehouseAbbr || "").toUpperCase())
-    )
+function filteredWarehouses(warehouses = []) {
+  const selected = new Set(
+    config.ss.warehouses.map((value) => String(value).toUpperCase())
+  );
+
+  return warehouses
+    .filter((warehouse) => {
+      if (selected.size === 0) return true;
+      return selected.has(String(warehouse.warehouseAbbr || "").toUpperCase());
+    })
     .map((warehouse) => ({
       warehouseAbbr: String(warehouse.warehouseAbbr || ""),
       qty: Math.max(0, Number(warehouse.qty || 0)),
       closeout: Boolean(warehouse.closeout),
       dropship: Boolean(warehouse.dropship),
+      excludeFreeFreight: Boolean(warehouse.excludeFreeFreight),
       fullCaseOnly: Boolean(warehouse.fullCaseOnly),
       returnable: warehouse.returnable !== false
     }))
     .sort((a, b) => b.qty - a.qty);
-
-  return {
-    warehouses,
-    availableQty: warehouses.reduce((sum, warehouse) => sum + warehouse.qty, 0)
-  };
 }
 
 function publicProduct(product) {
-  const inventory = warehouseSummary(product);
+  const warehouses = filteredWarehouses(product?.warehouses || []);
+  const availableQty = warehouses.reduce(
+    (sum, warehouse) => sum + warehouse.qty,
+    0
+  );
 
   return {
     sku: String(product?.sku || ""),
     skuId: product?.skuID_Master ?? product?.skuID ?? null,
     gtin: String(product?.gtin || ""),
     yourSku: String(product?.yourSku || ""),
+    styleId: product?.styleID ?? null,
     brandName: String(product?.brandName || ""),
     styleName: String(product?.styleName || ""),
     colorName: String(product?.colorName || ""),
     sizeName: String(product?.sizeName || ""),
     customerPrice:
-      product?.customerPrice === null || product?.customerPrice === undefined
+      product?.customerPrice === undefined || product?.customerPrice === null
         ? null
         : Number(product.customerPrice),
+    piecePrice:
+      product?.piecePrice === undefined || product?.piecePrice === null
+        ? null
+        : Number(product.piecePrice),
     qty: Math.max(0, Number(product?.qty || 0)),
-    availableQty: inventory.availableQty,
-    warehouses: inventory.warehouses,
-    closeout: inventory.warehouses.length > 0 &&
-      inventory.warehouses.every((warehouse) => warehouse.closeout),
-    fullCaseOnly: inventory.warehouses.some((warehouse) => warehouse.fullCaseOnly)
+    availableQty,
+    warehouses,
+    closeout:
+      warehouses.length > 0 &&
+      warehouses.every((warehouse) => warehouse.closeout),
+    fullCaseOnly: warehouses.some((warehouse) => warehouse.fullCaseOnly)
   };
 }
 
-async function productsForStyle(style, brand = "", { fresh = false } = {}) {
+async function resolveStyle(brand, style, { fresh = false } = {}) {
   const identifier = styleIdentifier(style, brand);
-  const cacheKey = catalogKey(style, brand);
-  const cached = styleCache.get(cacheKey);
 
-  if (!fresh && cacheValid(cached)) return cached.value;
-
-  const query = encodeURIComponent(identifier);
-  const warehouseQuery = config.ss.warehouses.length
-    ? `&Warehouses=${encodeURIComponent(config.ss.warehouses.join(","))}`
-    : "";
+  if (!identifier) {
+    throw new Error("S&S brand and style are required.");
+  }
 
   const { data, rateLimitRemaining } = await ssRequest(
-    `/products/?style=${query}${warehouseQuery}&mediatype=json`
+    `/styles/${encodeURIComponent(identifier)}${buildQuery({
+      fields: "StyleID,PartNumber,BrandName,StyleName,Title",
+      mediatype: "json"
+    })}`,
+    { fresh }
   );
+
+  const styles = Array.isArray(data) ? data : [];
+
+  const exact = styles.find((entry) => {
+    return (
+      normalize(entry.brandName) === normalize(brand) &&
+      normalize(entry.styleName) === normalize(style)
+    );
+  });
+
+  const resolved = exact || (styles.length === 1 ? styles[0] : null);
+
+  if (!resolved) {
+    throw new Error(
+      `S&S could not uniquely resolve mapped style "${identifier}".`
+    );
+  }
+
+  return {
+    styleID: Number(resolved.styleID),
+    partNumber: String(resolved.partNumber || ""),
+    brandName: String(resolved.brandName || brand || ""),
+    styleName: String(resolved.styleName || style || ""),
+    title: String(resolved.title || ""),
+    rateLimitRemaining
+  };
+}
+
+async function productsByStyleId(styleID, { fresh = false } = {}) {
+  const { data, rateLimitRemaining } = await ssRequest(
+    `/products/${buildQuery({
+      styleid: styleID,
+      Warehouses: config.ss.warehouses,
+      mediatype: "json"
+    })}`,
+    { fresh }
+  );
+
   const products = Array.isArray(data) ? data : [];
 
   if (products.length === 0) {
-    throw new Error(`S&S returned no products for mapped style "${identifier}".`);
+    throw new Error(`S&S returned no products for styleID ${styleID}.`);
   }
 
-  const value = {
-    identifier,
-    products,
-    rateLimitRemaining,
-    syncedAt: new Date().toISOString()
-  };
+  return { products, rateLimitRemaining };
+}
 
-  styleCache.set(cacheKey, { at: Date.now(), value });
-  return value;
+function findVariant(products, color, size) {
+  const wantedColor = normalizeColor(color);
+  const wantedSize = normalizeSize(size);
+
+  const exact = products.filter(
+    (product) =>
+      normalizeColor(product.colorName) === wantedColor &&
+      normalizeSize(product.sizeName) === wantedSize
+  );
+
+  if (exact.length === 1) return exact[0];
+
+  if (exact.length > 1) {
+    throw new Error(
+      `Multiple S&S variants matched ${color} / ${size}. Enter the exact S&S SKU.`
+    );
+  }
+
+  const colorOptions = [
+    ...new Set(
+      products
+        .filter((product) => normalizeSize(product.sizeName) === wantedSize)
+        .map((product) => product.colorName)
+    )
+  ].slice(0, 8);
+
+  throw new Error(
+    `No S&S variant matched ${color} / ${size}.` +
+    (colorOptions.length
+      ? ` Available colors for ${size}: ${colorOptions.join(", ")}.`
+      : "")
+  );
 }
 
 export function ssConfigurationStatus() {
   return {
     configured: credentialsConfigured(),
     accountNumberMasked: config.ss.accountNumber
-      ? `${"*".repeat(Math.max(0, config.ss.accountNumber.length - 4))}${config.ss.accountNumber.slice(-4)}`
+      ? `${"*".repeat(Math.max(0, config.ss.accountNumber.length - 4))}${
+          config.ss.accountNumber.slice(-4)
+        }`
       : "",
     baseUrl: config.ss.baseUrl,
     warehouses: config.ss.warehouses,
@@ -225,7 +315,11 @@ export function ssConfigurationStatus() {
 
 export async function testSsConnection() {
   const { data, rateLimitRemaining } = await ssRequest(
-    "/orders/?fields=OrderNumber&mediatype=json"
+    `/styles/${buildQuery({
+      fields: "StyleID",
+      mediatype: "json"
+    })}`,
+    { fresh: true }
   );
 
   return {
@@ -239,210 +333,118 @@ export async function testSsConnection() {
 
 export async function getSsProductBySku(sku, { fresh = false } = {}) {
   const cleanSku = String(sku || "").trim();
+
   if (!cleanSku) throw new Error("S&S SKU is required.");
 
-  const cacheKey = cleanSku.toUpperCase();
-  const cached = skuCache.get(cacheKey);
-  if (!fresh && cacheValid(cached)) return cached.value;
-
-  const warehouses = config.ss.warehouses.length
-    ? `?Warehouses=${encodeURIComponent(config.ss.warehouses.join(","))}&mediatype=json`
-    : "?mediatype=json";
-
   const { data, rateLimitRemaining } = await ssRequest(
-    `/products/${encodeURIComponent(cleanSku)}${warehouses}`
+    `/products/${encodeURIComponent(cleanSku)}${buildQuery({
+      Warehouses: config.ss.warehouses,
+      mediatype: "json"
+    })}`,
+    { fresh }
   );
+
   const product = Array.isArray(data) ? data[0] : null;
 
   if (!product) throw new Error(`S&S SKU ${cleanSku} was not found.`);
 
-  const value = {
-    product: publicProduct(product),
-    matchMethod: "supplier_sku",
-    rateLimitRemaining
-  };
-
-  skuCache.set(cacheKey, { at: Date.now(), value });
-  return value;
-}
-
-export async function matchSsProduct({
-  supplierSku,
-  style,
-  brand = "",
-  color,
-  size,
-  fresh = false
-}) {
-  if (supplierSku) {
-    try {
-      return await getSsProductBySku(supplierSku, { fresh });
-    } catch (error) {
-      if (!style || !color || !size) throw error;
-    }
-  }
-
-  if (!style || !color || !size) {
-    throw new Error("Style, color, and size are required for automatic S&S matching.");
-  }
-
-  if (fresh) styleCache.delete(catalogKey(style, brand));
-
-  const catalogEntry = getCatalogEntry(style, brand);
-  const source = catalogEntry && !fresh
-    ? {
-        products: catalogEntry.products,
-        rateLimitRemaining: catalogEntry.rateLimitRemaining || null
-      }
-    : await productsForStyle(style, brand, { fresh });
-
-  const { products, rateLimitRemaining } = source;
-  const normalizedStyle = normalize(style);
-  const normalizedColor = normalize(color);
-  const normalizedSize = normalizeSize(size);
-
-  const normalizedBrand = normalize(brand);
-
-  const candidates = products.filter((product) => {
-    const productStyle = normalize(product.styleName);
-    const styleMatches =
-      productStyle === normalizedStyle ||
-      productStyle.includes(normalizedStyle) ||
-      normalizedStyle.includes(productStyle);
-
-    const brandMatches =
-      !normalizedBrand ||
-      normalize(product.brandName) === normalizedBrand ||
-      normalize(product.brandName).includes(normalizedBrand) ||
-      normalizedBrand.includes(normalize(product.brandName));
-
-    return styleMatches &&
-      brandMatches &&
-      normalize(product.colorName) === normalizedColor &&
-      normalizeSize(product.sizeName) === normalizedSize;
-  });
-
-  if (candidates.length === 0) {
-    const colorSizeMatches = products.filter(
-      (product) =>
-        normalize(product.colorName) === normalizedColor &&
-        normalizeSize(product.sizeName) === normalizedSize
-    );
-
-    if (colorSizeMatches.length === 1) {
-      return {
-        product: publicProduct(colorSizeMatches[0]),
-        matchMethod: "style_query_color_size",
-        rateLimitRemaining
-      };
-    }
-
-    throw new Error(
-      `No exact S&S match for ${brand ? brand + " " : ""}${style} / ${color} / ${size}. Check the blank garment mapping or enter the S&S variant SKU manually.`
-    );
-  }
-
-  if (candidates.length > 1) {
-    throw new Error(
-      `Multiple S&S matches found for ${brand ? brand + " " : ""}${style} / ${color} / ${size}. Enter the S&S variant SKU manually.`
-    );
-  }
-
   return {
-    product: publicProduct(candidates[0]),
-    matchMethod: "style_color_size",
+    product: publicProduct(product),
+    matchMethod: "exact_supplier_sku",
     rateLimitRemaining
   };
 }
-
 
 export async function syncSsMappedCatalog(mappings = []) {
-  if (!credentialsConfigured()) {
-    throw new Error(
-      "S&S credentials are not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY in Railway."
-    );
-  }
-
   const unique = [];
   const seen = new Set();
 
   for (const mapping of Array.isArray(mappings) ? mappings : []) {
-    const style = String(mapping?.style || "").trim();
     const brand = String(mapping?.brand || "").trim();
-    if (!style) continue;
+    const style = String(mapping?.style || "").trim();
+    const garmentName = String(mapping?.garmentName || "").trim();
+
+    if (!brand || !style) continue;
 
     const key = catalogKey(style, brand);
     if (seen.has(key)) continue;
     seen.add(key);
-    unique.push({
-      garmentName: String(mapping?.garmentName || "").trim(),
-      brand,
-      style,
-      key,
-      identifier: styleIdentifier(style, brand)
-    });
+
+    unique.push({ key, brand, style, garmentName });
   }
 
   if (unique.length === 0) {
-    throw new Error("No blank garment mappings are configured.");
+    throw new Error("No S&S blank garment mappings are configured.");
   }
 
   const synced = [];
   const errors = [];
-  let totalVariants = 0;
   let rateLimitRemaining = null;
 
   for (const mapping of unique) {
     try {
-      const result = await productsForStyle(
-        mapping.style,
+      const resolved = await resolveStyle(
         mapping.brand,
+        mapping.style,
+        { fresh: true }
+      );
+
+      const productResult = await productsByStyleId(
+        resolved.styleID,
         { fresh: true }
       );
 
       runtimeStore.ssCatalog.styles[mapping.key] = {
         garmentName: mapping.garmentName,
-        brand: mapping.brand,
-        style: mapping.style,
-        identifier: result.identifier,
-        syncedAt: result.syncedAt,
-        rateLimitRemaining: result.rateLimitRemaining,
-        products: result.products
+        requestedBrand: mapping.brand,
+        requestedStyle: mapping.style,
+        brand: resolved.brandName,
+        style: resolved.styleName,
+        title: resolved.title,
+        styleID: resolved.styleID,
+        partNumber: resolved.partNumber,
+        syncedAt: new Date().toISOString(),
+        products: productResult.products
       };
 
-      totalVariants += result.products.length;
       rateLimitRemaining =
-        result.rateLimitRemaining ?? rateLimitRemaining;
+        productResult.rateLimitRemaining ??
+        resolved.rateLimitRemaining ??
+        rateLimitRemaining;
 
       synced.push({
         garmentName: mapping.garmentName,
-        brand: mapping.brand,
-        style: mapping.style,
-        identifier: result.identifier,
-        variants: result.products.length,
-        syncedAt: result.syncedAt
+        brand: resolved.brandName,
+        style: resolved.styleName,
+        title: resolved.title,
+        styleID: resolved.styleID,
+        partNumber: resolved.partNumber,
+        variants: productResult.products.length
       });
     } catch (error) {
       errors.push({
         garmentName: mapping.garmentName,
         brand: mapping.brand,
         style: mapping.style,
-        identifier: mapping.identifier,
+        identifier: styleIdentifier(mapping.style, mapping.brand),
         error: error.message
       });
     }
   }
 
-  const allCatalogEntries = Object.values(runtimeStore.ssCatalog.styles);
   runtimeStore.ssCatalog.lastSyncAt = new Date().toISOString();
   runtimeStore.ssCatalog.lastError = errors.length
     ? `${errors.length} mapped style(s) failed to sync.`
     : "";
-  runtimeStore.ssCatalog.syncedStyleCount = allCatalogEntries.length;
-  runtimeStore.ssCatalog.variantCount = allCatalogEntries.reduce(
+
+  const entries = Object.values(runtimeStore.ssCatalog.styles);
+  runtimeStore.ssCatalog.syncedStyleCount = entries.length;
+  runtimeStore.ssCatalog.variantCount = entries.reduce(
     (sum, entry) => sum + (Array.isArray(entry.products) ? entry.products.length : 0),
     0
   );
+
+  schedulePersistentSave();
 
   return {
     success: errors.length === 0,
@@ -454,18 +456,22 @@ export async function syncSsMappedCatalog(mappings = []) {
 }
 
 export function ssCatalogStatus() {
-  const styles = Object.values(runtimeStore.ssCatalog.styles).map((entry) => ({
-    garmentName: entry.garmentName || "",
-    brand: entry.brand || "",
-    style: entry.style || "",
-    identifier: entry.identifier || "",
-    syncedAt: entry.syncedAt || null,
-    variants: Array.isArray(entry.products) ? entry.products.length : 0
-  }));
+  const styles = Object.values(runtimeStore.ssCatalog.styles || {}).map(
+    (entry) => ({
+      garmentName: entry.garmentName || "",
+      brand: entry.brand || "",
+      style: entry.style || "",
+      title: entry.title || "",
+      styleID: entry.styleID ?? null,
+      partNumber: entry.partNumber || "",
+      syncedAt: entry.syncedAt || null,
+      variants: Array.isArray(entry.products) ? entry.products.length : 0
+    })
+  );
 
   return {
-    lastSyncAt: runtimeStore.ssCatalog.lastSyncAt,
-    lastError: runtimeStore.ssCatalog.lastError,
+    lastSyncAt: runtimeStore.ssCatalog.lastSyncAt || null,
+    lastError: runtimeStore.ssCatalog.lastError || "",
     syncedStyleCount: styles.length,
     variantCount: styles.reduce((sum, entry) => sum + entry.variants, 0),
     styles
@@ -480,12 +486,66 @@ export function clearSsCatalog() {
     syncedStyleCount: 0,
     variantCount: 0
   };
-  styleCache.clear();
-  skuCache.clear();
+
+  requestCache.clear();
+  schedulePersistentSave();
 }
 
+export async function matchSsProduct({
+  supplierSku,
+  style,
+  brand = "",
+  color,
+  size,
+  fresh = false
+}) {
+  if (supplierSku) {
+    return getSsProductBySku(supplierSku, { fresh });
+  }
+
+  const key = catalogKey(style, brand);
+  let catalogEntry = runtimeStore.ssCatalog.styles?.[key];
+
+  if (!catalogEntry || fresh) {
+    const resolved = await resolveStyle(brand, style, { fresh });
+    const productResult = await productsByStyleId(
+      resolved.styleID,
+      { fresh }
+    );
+
+    catalogEntry = {
+      garmentName: "",
+      requestedBrand: brand,
+      requestedStyle: style,
+      brand: resolved.brandName,
+      style: resolved.styleName,
+      title: resolved.title,
+      styleID: resolved.styleID,
+      partNumber: resolved.partNumber,
+      syncedAt: new Date().toISOString(),
+      products: productResult.products
+    };
+
+    runtimeStore.ssCatalog.styles[key] = catalogEntry;
+    runtimeStore.ssCatalog.lastSyncAt = new Date().toISOString();
+    schedulePersistentSave();
+  }
+
+  const variant = findVariant(catalogEntry.products || [], color, size);
+
+  return {
+    product: publicProduct(variant),
+    matchMethod: "mapped_styleid_catalog",
+    styleResolution: {
+      styleID: catalogEntry.styleID,
+      partNumber: catalogEntry.partNumber,
+      brand: catalogEntry.brand,
+      style: catalogEntry.style
+    },
+    rateLimitRemaining: null
+  };
+}
 
 export function clearSsCache() {
-  styleCache.clear();
-  skuCache.clear();
+  requestCache.clear();
 }

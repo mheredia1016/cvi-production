@@ -1,6 +1,7 @@
 
 import express from "express";
 import { runtimeStore } from "../services/runtimeStore.js";
+import { schedulePersistentSave } from "../services/persistentState.js";
 import {
   listSsGarmentMappings,
   saveSsGarmentMappings
@@ -18,6 +19,7 @@ settingsRouter.post("/print-order", (req, res) => {
     : [];
 
   runtimeStore.settings.printOrder = printOrder;
+  schedulePersistentSave();
 
   res.json({
     success: true,
@@ -35,6 +37,7 @@ settingsRouter.get("/ss-garment-mappings", (req, res) => {
 
 settingsRouter.post("/ss-garment-mappings", (req, res) => {
   const mappings = saveSsGarmentMappings(req.body?.mappings);
+  schedulePersistentSave();
 
   res.json({
     success: true,
