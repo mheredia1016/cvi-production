@@ -3,6 +3,7 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
+import { fileURLToPath } from "url";
 
 const SERVER_URL = String(process.env.SERVER_URL || "").replace(/\/+$/, "");
 const AGENT_TOKEN = String(process.env.AGENT_TOKEN || "").trim();
@@ -19,6 +20,11 @@ const PRINT_DRY_RUN_ROOT = process.env.PRINT_DRY_RUN_ROOT || "C:\\ProductionOS\\
 const GRAPHICS_LAB_EXE = String(process.env.GRAPHICS_LAB_EXE || "").trim();
 const GRAPHICS_LAB_OPEN_MODE = String(process.env.GRAPHICS_LAB_OPEN_MODE || "associated_app").trim().toLowerCase();
 const DIAGNOSE_ONLY = process.argv.includes("--diagnose");
+const AGENT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const GRAPHICS_LAB_SCRIPT = path.join(AGENT_DIR, "graphics-lab", "graphics-lab-loader.ahk");
+const GRAPHICS_LAB_CONFIG = path.join(AGENT_DIR, "graphics-lab", "graphics-lab.ini");
+let AUTOHOTKEY_EXE = "";
+
 
 let ARTWORK_ROOT = "";
 
@@ -570,6 +576,38 @@ async function completeGraphicsLabOpenJob(job, payload) {
   }
 }
 
+
+function detectAutoHotkeyExe() {
+  const candidates = [
+    process.env.AUTOHOTKEY_EXE,
+    "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe",
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Programs", "AutoHotkey", "v2", "AutoHotkey64.exe")
+      : ""
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || "";
+}
+
+function runGraphicsLabAutoHotkey(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!AUTOHOTKEY_EXE) return reject(new Error("AutoHotkey v2 was not found."));
+    if (!fs.existsSync(GRAPHICS_LAB_CONFIG)) {
+      return reject(new Error("Run CALIBRATE-GRAPHICS-LAB.cmd first."));
+    }
+
+    const child = spawn(AUTOHOTKEY_EXE, [GRAPHICS_LAB_SCRIPT, filePath], {
+      windowsHide: false,
+      stdio: "ignore"
+    });
+
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      code === 0 ? resolve() : reject(new Error(`Graphics Lab automation exited with code ${code}.`));
+    });
+  });
+}
+
 function openWithAssociatedApplication(filePath) {
   return new Promise((resolve, reject) => {
     const child = spawn(
@@ -622,7 +660,9 @@ async function processGraphicsLabOpenJob(job) {
       throw new Error(`Artwork file does not exist: ${job.artworkPath}`);
     }
 
-    if (GRAPHICS_LAB_OPEN_MODE === "exe") {
+    if (GRAPHICS_LAB_OPEN_MODE === "autohotkey") {
+      await runGraphicsLabAutoHotkey(job.artworkPath);
+    } else if (GRAPHICS_LAB_OPEN_MODE === "exe") {
       await openWithGraphicsLabExe(job.artworkPath);
     } else {
       await openWithAssociatedApplication(job.artworkPath);
@@ -649,6 +689,7 @@ async function pollGraphicsLabOpenJobs() {
 
 async function start() {
   ARTWORK_ROOT = detectArtworkRoot();
+  AUTOHOTKEY_EXE = detectAutoHotkeyExe();
   ensureLocalFolders();
 
   const diagnostics = await printStartupDiagnostics();

@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v8-1-auto-detect-agent",
-  "version": "8.1.0",
+  "name": "productionos-v8-2-graphics-lab-import",
+  "version": "8.2.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
