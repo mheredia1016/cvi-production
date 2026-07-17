@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Production Stations</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">ProductionOS</div>
+    <a href="/daily.html">📋 Daily Manager</a>
+    <a href="/stations.html" class="active">🏭 Production Stations</a>
+    <a href="/inventory.html">📦 Blank Inventory</a>
+    <a href="/settings.html">⚙️ Settings</a>
+    <a href="/printer-test.html">🖨️ Printer Scan Test</a>
+  </aside>
+
+  <main class="main">
+    <div class="shadow">PRODUCTIONOS v10 — OPERATOR WORKSPACE</div>
+
+    <div class="station-dashboard-header">
+      <div>
+        <h1>Production Stations</h1>
+        <p class="muted">Choose a production date and open a station.</p>
+      </div>
+      <label class="station-date-label">
+        Production Date
+        <input id="date" type="date" onchange="loadStations()">
+      </label>
+    </div>
+
+    <section class="card">
+      <div id="stationSummary" class="metrics"></div>
+      <div id="stationGrid" class="station-grid"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const categories=[
+  'Rush / Skip The Line',
+  'White Ink',
+  'White Ink, Back',
+  'DTG Light',
+  'DTG Light, Back',
+  'DTF',
+  'Embroidery',
+  'Embroidery To Order',
+  'Poster/Sticker',
+  'Sublimation',
+  'Pre-Stock',
+  'EPT'
+];
+
+function localIsoDate(inputDate=new Date()){
+  const year=inputDate.getFullYear();
+  const month=String(inputDate.getMonth()+1).padStart(2,'0');
+  const day=String(inputDate.getDate()).padStart(2,'0');
+  return `${year}-${month}-${day}`;
+}
+
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>"']/g,char=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  })[char]);
+}
+
+async function loadStations(){
+  const summary=await (await fetch('/api/manager/summary?date='+encodeURIComponent(date.value))).json();
+  const counts=new Map((summary.byType||[]).map(entry=>[entry.type,entry.unprinted]));
+
+  const cards=categories.map(category=>{
+    const rush=category==='Rush / Skip The Line';
+    const count=rush?summary.rush:(counts.get(category)||0);
+    return {category,rush,count};
+  });
+
+  stationSummary.innerHTML=[
+    ['Total Pieces',summary.total],
+    ['Unprinted Labels',summary.unprinted],
+    ['Rush Pieces',summary.rush],
+    ['Active Stations',cards.filter(card=>card.count>0).length]
+  ].map(([label,value])=>`<div class="metric"><span class="muted">${label}</span><br><b>${value}</b></div>`).join('');
+
+  stationGrid.innerHTML=cards.map(card=>{
+    const params=new URLSearchParams({
+      date:date.value,
+      category:card.category,
+      rush:card.rush?'true':'false'
+    });
+
+    return `<article class="station-card ${card.count===0?'station-empty':''}">
+      <div class="station-card-top">
+        <h2>${escapeHtml(card.category)}</h2>
+        <span class="station-count">${card.count}</span>
+      </div>
+      <p>${card.count} queued piece${card.count===1?'':'s'}</p>
+      <a class="button-link ${card.count===0?'disabled-link':''}" href="${card.count?'/station.html?'+params.toString():'#'}">
+        Open Station
+      </a>
+    </article>`;
+  }).join('');
+}
+
+date.value=localStorage.getItem('productionos_station_date')||localIsoDate();
+date.addEventListener('change',()=>localStorage.setItem('productionos_station_date',date.value));
+loadStations();
+</script>
+</body>
+</html>

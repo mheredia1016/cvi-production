@@ -27,7 +27,15 @@
   <h2>Artwork & Printer Instructions</h2>
   <div id="productionInspector">Shadow import orders to inspect artwork mapping.</div>
 </section>
-<section class="card"><div id="labels"></div></section>
+<section class="card no-print">
+  <h2>Operator Stations</h2>
+  <p class="muted">
+    Clicking <b>Open</b> above now launches a dedicated full-screen station.
+    Label previews no longer expand into this page.
+  </p>
+  <a class="button-link" href="/stations.html">Open Production Stations Dashboard</a>
+  <div id="labels" style="display:none"></div>
+</section>
 <section class="card"><h2>Garment Report</h2><div id="garments">No data.</div></section>
 <section class="card no-print">
   <div class="row between garment-order-header">
@@ -304,23 +312,13 @@ async function loadSummary(){
   </div>`).join('');
 }
 
-async function openGroup(type,isRush){
-  currentCategory=type;
-  currentStock=isRush?'red':'white';
-
-  let url='/api/manager/labels?date='+date.value+'&unprinted=true&rush='+(isRush?'true':'false');
-  if(!isRush) url+='&type='+encodeURIComponent(type);
-
-  current=await (await fetch(url)).json();
-
-  labels.innerHTML=
-    `<div class="no-print"><h2>${type}</h2><p>${current.length} labels • ${currentStock.toUpperCase()} stock</p>`+
-    `<button onclick="printLabelsOnly()">Print Labels</button> `+
-    `<button class="secondary" onclick="markPrinted()">Mark Printed</button></div>`+
-    current.map(piece=>thermalLabelHtml(piece)+
-      `<div class="no-print" style="margin-bottom:12px">
-        <button class="secondary" onclick="reprintOne('${piece.pieceId}')">Reprint ${piece.pieceId}</button>
-      </div>`).join('');
+function openGroup(type,isRush){
+  const params=new URLSearchParams({
+    date:date.value,
+    category:type,
+    rush:isRush?'true':'false'
+  });
+  window.location.href='/station.html?'+params.toString();
 }
 
 

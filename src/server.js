@@ -35,7 +35,7 @@ app.use("/api/inventory", inventoryRouter);
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    service: "ProductionOS v9.2",
+    service: "ProductionOS v10.0",
     mode: "SHADOW",
     persistentState: {
       loaded: persistentLoad.loaded,
@@ -45,5 +45,5 @@ app.get("/health", (req, res) => {
 });
 
 app.listen(config.port, () => {
-  console.log(`ProductionOS v9.2 running on port ${config.port}`);
+  console.log(`ProductionOS v10.0 running on port ${config.port}`);
 });

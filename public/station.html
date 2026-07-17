@@ -1,0 +1,421 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Production Station</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+</head>
+<body class="station-body">
+<header class="station-topbar">
+  <a href="/stations.html" class="station-back">← Stations</a>
+  <div>
+    <div id="stationName" class="station-name">Production Station</div>
+    <div id="stationMeta" class="muted"></div>
+  </div>
+  <div class="station-operator">
+    <label>
+      Operator
+      <input id="operator" placeholder="Enter name" onchange="saveOperator()">
+    </label>
+  </div>
+</header>
+
+<main class="station-workspace">
+  <section class="station-overview">
+    <div class="station-progress-card">
+      <div class="station-progress-numbers">
+        <span><b id="completedCount">0</b> completed</span>
+        <span><b id="remainingCount">0</b> remaining</span>
+      </div>
+      <div class="station-progress-track">
+        <div id="progressBar" class="station-progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="station-primary-actions">
+      <button onclick="printAllLabels()">Print All Labels</button>
+      <button class="secondary" onclick="markAllLabelsPrinted()">Mark All Labels Printed</button>
+      <button class="secondary" onclick="toggleQueueList()">Queue List</button>
+    </div>
+  </section>
+
+  <div id="stationMessage"></div>
+
+  <section id="currentPieceCard" class="current-piece-card">
+    <div class="empty-station">Loading station…</div>
+  </section>
+
+  <section id="queueListCard" class="card station-queue-list" hidden>
+    <h2>Queue</h2>
+    <div id="queueList"></div>
+  </section>
+</main>
+
+<script>
+const params=new URLSearchParams(location.search);
+const stationDate=params.get('date')||'';
+const category=params.get('category')||'';
+const rush=params.get('rush')==='true';
+
+let pieces=[];
+let initialCount=0;
+let currentIndex=0;
+
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>"']/g,char=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  })[char]);
+}
+
+function saveOperator(){
+  localStorage.setItem('productionos_operator',operator.value.trim());
+}
+
+function requireOperator(){
+  const value=operator.value.trim();
+  if(!value){
+    stationMessage.innerHTML='<div class="error">Enter the operator name before starting production.</div>';
+    operator.focus();
+    return false;
+  }
+  return true;
+}
+
+function isDtf(piece){
+  return String(piece.backendProductInfo||piece.process||'').toLowerCase().includes('dtf');
+}
+
+async function loadQueue({keepCurrent=true}={}){
+  const currentId=keepCurrent?pieces[currentIndex]?.pieceId:null;
+  const query=new URLSearchParams({
+    date:stationDate,
+    category,
+    rush:rush?'true':'false'
+  });
+
+  const response=await fetch('/api/manager/station-queue?'+query.toString());
+  const data=await response.json();
+  pieces=data.pieces||[];
+
+  if(!initialCount)initialCount=pieces.length;
+
+  if(currentId){
+    const nextIndex=pieces.findIndex(piece=>piece.pieceId===currentId);
+    currentIndex=nextIndex>=0?nextIndex:Math.min(currentIndex,Math.max(0,pieces.length-1));
+  }else{
+    currentIndex=Math.min(currentIndex,Math.max(0,pieces.length-1));
+  }
+
+  stationName.textContent=category;
+  stationMeta.textContent=`${stationDate} • ${rush?'RED':'WHITE'} label stock`;
+  render();
+}
+
+function render(){
+  const remaining=pieces.length;
+  const completed=Math.max(0,initialCount-remaining);
+  completedCount.textContent=completed;
+  remainingCount.textContent=remaining;
+  progressBar.style.width=initialCount?`${Math.min(100,(completed/initialCount)*100)}%`:'0%';
+
+  if(!pieces.length){
+    currentPieceCard.innerHTML=`<div class="station-complete-screen">
+      <div class="station-complete-check">✓</div>
+      <h1>Station Complete</h1>
+      <p>No remaining pieces in ${escapeHtml(category)}.</p>
+      <a class="button-link" href="/stations.html">Return to Stations</a>
+    </div>`;
+    queueList.innerHTML='';
+    return;
+  }
+
+  const piece=pieces[currentIndex];
+  const graphics=piece.graphics||{};
+  const dtf=isDtf(piece);
+  const status=piece.stationStatus||'queued';
+
+  currentPieceCard.innerHTML=`
+    <div class="current-piece-header">
+      <div>
+        <span class="station-position">Piece ${currentIndex+1} of ${pieces.length}</span>
+        <h1>${escapeHtml(piece.pieceId)}</h1>
+        <p class="muted">Order ${escapeHtml(piece.orderNumber)}</p>
+      </div>
+      <div class="piece-badges">
+        ${piece.rush?'<span class="badge rush-badge">RUSH</span>':''}
+        <span class="badge">${escapeHtml(status.replaceAll('_',' '))}</span>
+        ${piece.stationOperator?`<span class="badge">Operator: ${escapeHtml(piece.stationOperator)}</span>`:''}
+      </div>
+    </div>
+
+    <div class="piece-information-grid">
+      <div class="piece-info-box">
+        <span>Garment</span>
+        <b>${escapeHtml(piece.style||piece.garment)}</b>
+        <strong>${escapeHtml(piece.color)} • ${escapeHtml(piece.size)}</strong>
+      </div>
+      <div class="piece-info-box">
+        <span>Process</span>
+        <b>${escapeHtml(piece.backendProductInfo||piece.process)}</b>
+        <strong>${piece.requiresBack?'Front + Back':'Front only'}</strong>
+      </div>
+      <div class="piece-info-box">
+        <span>Artwork SKU</span>
+        <b>${escapeHtml(piece.artworkSku||'')}</b>
+        <strong>${escapeHtml(piece.artworkSource||'')}</strong>
+      </div>
+      <div class="piece-info-box">
+        <span>Label</span>
+        <b>${piece.labelPrinted?'Printed':'Not printed'}</b>
+        <button class="secondary mini" onclick="reprintCurrentLabel()">Reprint Current Label</button>
+      </div>
+    </div>
+
+    ${dtf?renderDtfControls(piece):renderGraphicsControls(piece,graphics)}
+
+    <div class="station-navigation">
+      <button class="secondary" onclick="previousPiece()" ${currentIndex===0?'disabled':''}>← Previous</button>
+      <button class="secondary" onclick="stationAction('hold')">Hold</button>
+      <button class="secondary" onclick="stationAction('skip')">Skip</button>
+      <button onclick="nextPiece()" ${currentIndex>=pieces.length-1?'disabled':''}>Next →</button>
+    </div>`;
+
+  queueList.innerHTML=pieces.map((entry,index)=>`
+    <button class="queue-list-row ${index===currentIndex?'active':''}" onclick="selectPiece(${index})">
+      <span>${escapeHtml(entry.pieceId)}</span>
+      <span>${escapeHtml(entry.orderNumber)}</span>
+      <span>${escapeHtml(entry.color)} ${escapeHtml(entry.size)}</span>
+      <span>${escapeHtml(entry.stationStatus||'queued')}</span>
+    </button>
+  `).join('');
+}
+
+function renderGraphicsControls(piece,graphics){
+  return `<div class="production-control-panel">
+    <div class="print-side-card ${graphics.frontPrintedAt?'side-complete':''}">
+      <h2>Front</h2>
+      <p>${graphics.frontPrintedAt?'✓ Printed':graphics.frontOpenedAt?'Artwork opened':'Not started'}</p>
+      <div class="row">
+        <button onclick="openGraphics('front')">Load Front</button>
+        <button class="secondary" onclick="markSide('front',${graphics.frontPrintedAt?'false':'true'})">
+          ${graphics.frontPrintedAt?'Clear Printed':'Mark Front Printed'}
+        </button>
+      </div>
+    </div>
+
+    <div class="print-side-card ${!piece.requiresBack||graphics.backPrintedAt?'side-complete':''}">
+      <h2>Back</h2>
+      <p>${!piece.requiresBack?'Not required':graphics.backPrintedAt?'✓ Printed':graphics.backOpenedAt?'Artwork opened':'Not started'}</p>
+      <div class="row">
+        <button onclick="openGraphics('back')" ${piece.requiresBack?'':'disabled'}>Load Back</button>
+        <button class="secondary" onclick="markSide('back',${graphics.backPrintedAt?'false':'true'})" ${piece.requiresBack?'':'disabled'}>
+          ${graphics.backPrintedAt?'Clear Printed':'Mark Back Printed'}
+        </button>
+      </div>
+    </div>
+
+    <div class="finish-piece-panel">
+      <button class="finish-piece-button" onclick="completeCurrentPiece()" ${graphics.pieceComplete?'':'disabled'}>
+        Complete Piece & Load Next
+      </button>
+      <p class="muted">${graphics.pieceComplete?'All required sides are printed.':'Complete all required sides first.'}</p>
+    </div>
+  </div>`;
+}
+
+function renderDtfControls(){
+  return `<div class="production-control-panel dtf-control-panel">
+    <div class="dtf-coming-soon">
+      <h2>DTF / NeoStampa</h2>
+      <p>The DTF station is separated and ready. NeoStampa submission is not enabled until its API connection is configured and tested.</p>
+      <button disabled>Send to NeoStampa — Not Connected</button>
+      <button class="secondary" onclick="stationAction('complete')">Mark DTF Piece Complete Manually</button>
+    </div>
+  </div>`;
+}
+
+async function stationAction(action){
+  if(!requireOperator())return false;
+  const piece=pieces[currentIndex];
+  if(!piece)return false;
+
+  const response=await fetch('/api/manager/station-piece/'+encodeURIComponent(piece.pieceId)+'/action',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action,operator:operator.value.trim()})
+  });
+  const data=await response.json();
+
+  if(!response.ok){
+    stationMessage.innerHTML='<div class="error">'+escapeHtml(data.error)+'</div>';
+    return false;
+  }
+
+  stationMessage.innerHTML='<div class="success">✓ '+escapeHtml(action)+' saved for '+escapeHtml(piece.pieceId)+'.</div>';
+
+  if(['complete','skip'].includes(action)){
+    await loadQueue({keepCurrent:false});
+  }else{
+    await loadQueue();
+  }
+  return true;
+}
+
+async function completeCurrentPiece(){
+  const success=await stationAction('complete');
+  if(success)currentIndex=Math.min(currentIndex,pieces.length-1);
+}
+
+async function openGraphics(side){
+  if(!requireOperator())return;
+  const piece=pieces[currentIndex];
+  await stationAction('start');
+
+  const response=await fetch('/api/printer/piece/'+encodeURIComponent(piece.pieceId)+'/open-graphics-lab',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({side})
+  });
+  const data=await response.json();
+
+  stationMessage.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message||`${side} artwork queued for Graphics Lab.`)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  setTimeout(()=>loadQueue(),1200);
+}
+
+async function markSide(side,printed){
+  if(!requireOperator())return;
+  const piece=pieces[currentIndex];
+
+  const response=await fetch('/api/printer/piece/'+encodeURIComponent(piece.pieceId)+'/mark-graphics-printed',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({side,printed})
+  });
+  const data=await response.json();
+
+  stationMessage.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+
+  await loadQueue();
+}
+
+function thermalLabelHtml(piece){
+  const instruction=(piece.printerInstructions||[]).includes('Uncheck Black')
+    ? '<div class="instruction">*** UNCHECK BLACK ***</div>'
+    : '';
+
+  const processText=piece.requiresBack
+    ? `${escapeHtml(piece.process||piece.backendProductInfo)}, BACK`
+    : escapeHtml(piece.process||piece.backendProductInfo);
+
+  return `<div class="thermal">
+    <div class="top">
+      <span>${piece.rush?'RUSH — SKIP THE LINE':escapeHtml(piece.orderNumber)}</span>
+      <span>${escapeHtml(piece.orderNumber)}</span>
+    </div>
+    <div class="middle">
+      <div>
+        <div class="barcode">*${escapeHtml(piece.pieceId)}*</div>
+        <div class="piece">${escapeHtml(piece.pieceId)}</div>
+      </div>
+      <div class="type">${processText}<br>${piece.unitNumber} OF ${piece.unitCount}</div>
+    </div>
+    ${instruction}
+    <div class="bottom">
+      <span>${escapeHtml(piece.style||piece.garment)} ${escapeHtml(piece.color)} ${escapeHtml(piece.size)}</span>
+      <span>${escapeHtml(piece.artworkSku||'')}</span>
+    </div>
+  </div>`;
+}
+
+function printPieces(labelPieces,title){
+  if(!labelPieces.length){
+    stationMessage.innerHTML='<div class="error">No labels are available.</div>';
+    return;
+  }
+
+  const popup=window.open('','_blank','width=900,height=700');
+  if(!popup){
+    stationMessage.innerHTML='<div class="error">Allow pop-ups so the entire label batch can open as one print job.</div>';
+    return;
+  }
+
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+    <style>
+      @page{size:3in 1in;margin:0}
+      *{box-sizing:border-box}
+      html,body{margin:0;padding:0;background:#fff}
+      .thermal{width:3in;height:1in;background:#fff;color:#000;padding:.05in .07in;overflow:hidden;page-break-after:always;break-after:page;font-family:Arial,sans-serif}
+      .top{font-size:10px;font-weight:900;display:flex;justify-content:space-between;white-space:nowrap}
+      .middle{display:flex;justify-content:space-between;align-items:center}
+      .barcode{font-family:'Libre Barcode 39',monospace;font-size:32px;line-height:.75;white-space:nowrap}
+      .piece{font-size:11px;font-weight:900}
+      .type{text-align:right;font-size:10px;font-weight:900;line-height:1.05}
+      .instruction{font-size:8px;font-weight:900;text-align:center}
+      .bottom{font-size:7.5px;font-weight:700;display:flex;justify-content:space-between;gap:6px;white-space:nowrap}
+    </style></head><body>${labelPieces.map(thermalLabelHtml).join('')}</body></html>`);
+  popup.document.close();
+  popup.focus();
+  setTimeout(()=>popup.print(),700);
+}
+
+function printAllLabels(){
+  printPieces(pieces,`${category} Labels`);
+}
+
+function reprintCurrentLabel(){
+  const piece=pieces[currentIndex];
+  if(piece)printPieces([piece],`Reprint ${piece.pieceId}`);
+}
+
+async function markAllLabelsPrinted(){
+  if(!pieces.length)return;
+  const response=await fetch('/api/manager/mark-printed',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      pieceIds:pieces.map(piece=>piece.pieceId),
+      category,
+      labelStock:rush?'red':'white'
+    })
+  });
+  const data=await response.json();
+  stationMessage.innerHTML=response.ok
+    ? '<div class="success">✓ '+escapeHtml(data.message)+'</div>'
+    : '<div class="error">'+escapeHtml(data.error)+'</div>';
+  await loadQueue();
+}
+
+function previousPiece(){
+  currentIndex=Math.max(0,currentIndex-1);
+  render();
+}
+
+function nextPiece(){
+  currentIndex=Math.min(pieces.length-1,currentIndex+1);
+  render();
+}
+
+function selectPiece(index){
+  currentIndex=index;
+  render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function toggleQueueList(){
+  queueListCard.hidden=!queueListCard.hidden;
+}
+
+operator.value=localStorage.getItem('productionos_operator')||'';
+loadQueue();
+setInterval(()=>loadQueue(),5000);
+</script>
+</body>
+</html>

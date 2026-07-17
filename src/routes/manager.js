@@ -23,12 +23,153 @@ import {
   resolveSsLookup
 } from "../services/ssGarmentMappings.js";
 import { getOnHand } from "../services/blankInventory.js";
+import { schedulePersistentSave } from "../services/persistentState.js";
 
 export const managerRouter = express.Router();
 
 function storeName(storeId, stores) {
   return stores.find((store) => Number(store.storeId) === Number(storeId))?.storeName || `Store ${storeId}`;
 }
+
+
+function pieceGraphicsStatus(piece) {
+  const status = runtimeStore.graphicsLabPieceStatus[piece.pieceId] || {
+    front: { openedAt: null, printedAt: null },
+    back: { openedAt: null, printedAt: null },
+    completedAt: null
+  };
+
+  const frontPrinted = Boolean(status.front?.printedAt);
+  const backPrinted = !piece.requiresBack || Boolean(status.back?.printedAt);
+
+  return {
+    frontOpenedAt: status.front?.openedAt || null,
+    frontPrintedAt: status.front?.printedAt || null,
+    backOpenedAt: status.back?.openedAt || null,
+    backPrintedAt: status.back?.printedAt || null,
+    pieceComplete: frontPrinted && backPrinted
+  };
+}
+
+managerRouter.get("/station-queue", (req, res) => {
+  const date = String(req.query.date || "");
+  const category = String(req.query.category || "");
+  const rush = String(req.query.rush || "false") === "true";
+  const includeCompleted = String(req.query.includeCompleted || "false") === "true";
+
+  let pieces = runtimeStore.pieces.filter(
+    (piece) => !date || piece.orderDate === date
+  );
+
+  pieces = rush
+    ? pieces.filter((piece) => piece.rush)
+    : pieces.filter(
+        (piece) =>
+          !piece.rush &&
+          (!category || piece.backendProductInfo === category)
+      );
+
+  if (!includeCompleted) {
+    pieces = pieces.filter(
+      (piece) =>
+        piece.stationStatus !== "completed" &&
+        !pieceGraphicsStatus(piece).pieceComplete
+    );
+  }
+
+  const queue = pieces.map((piece) => ({
+    ...piece,
+    graphics: pieceGraphicsStatus(piece)
+  }));
+
+  res.json({
+    date,
+    category,
+    rush,
+    count: queue.length,
+    pieces: queue
+  });
+});
+
+managerRouter.post("/station-piece/:pieceId/action", (req, res) => {
+  const piece = runtimeStore.pieces.find(
+    (entry) => entry.pieceId === String(req.params.pieceId)
+  );
+
+  if (!piece) return res.status(404).json({ error: "Piece not found." });
+
+  const action = String(req.body?.action || "");
+  const operator = String(req.body?.operator || "").trim();
+  const now = new Date().toISOString();
+
+  const allowed = new Set([
+    "start",
+    "hold",
+    "resume",
+    "skip",
+    "complete",
+    "reset"
+  ]);
+
+  if (!allowed.has(action)) {
+    return res.status(400).json({ error: "Unknown station action." });
+  }
+
+  if (operator) piece.stationOperator = operator;
+
+  if (action === "start") {
+    piece.stationStatus = "in_progress";
+    piece.stationStartedAt ||= now;
+  }
+
+  if (action === "hold") {
+    piece.stationStatus = "held";
+    piece.stationHeldAt = now;
+  }
+
+  if (action === "resume") {
+    piece.stationStatus = "in_progress";
+    piece.stationHeldAt = null;
+    piece.stationStartedAt ||= now;
+  }
+
+  if (action === "skip") {
+    piece.stationStatus = "skipped";
+    piece.stationSkippedAt = now;
+  }
+
+  if (action === "complete") {
+    const graphics = pieceGraphicsStatus(piece);
+
+    if (!graphics.pieceComplete && !String(piece.backendProductInfo || "").toLowerCase().includes("dtf")) {
+      return res.status(409).json({
+        error: "All required print sides must be marked printed first.",
+        graphics
+      });
+    }
+
+    piece.stationStatus = "completed";
+    piece.stationCompletedAt = now;
+  }
+
+  if (action === "reset") {
+    piece.stationStatus = "queued";
+    piece.stationStartedAt = null;
+    piece.stationCompletedAt = null;
+    piece.stationHeldAt = null;
+    piece.stationSkippedAt = null;
+  }
+
+  schedulePersistentSave();
+
+  res.json({
+    success: true,
+    piece: {
+      ...piece,
+      graphics: pieceGraphicsStatus(piece)
+    }
+  });
+});
 
 managerRouter.get("/status", (req, res) => {
   res.json({
@@ -179,6 +320,8 @@ managerRouter.post("/mark-printed", (req, res) => {
       labelStock
     };
   }
+
+  schedulePersistentSave();
 
   res.json({
     success: true,

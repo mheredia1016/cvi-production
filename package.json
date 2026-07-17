@@ -1,6 +1,6 @@
 {
-  "name": "productionos-v9-2-garment-order-date",
-  "version": "9.2.0",
+  "name": "productionos-v10-operator-workspace",
+  "version": "10.0.0",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

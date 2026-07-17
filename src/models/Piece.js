@@ -35,6 +35,12 @@ export function createPiece(data) {
     labelPrintedAt: null,
     labelStock: data.rush ? "red" : "white",
     inventoryDeductedAt: null,
-    inventoryDeductionKey: null
+    inventoryDeductionKey: null,
+    stationStatus: "queued",
+    stationOperator: "",
+    stationStartedAt: null,
+    stationCompletedAt: null,
+    stationHeldAt: null,
+    stationSkippedAt: null
   };
 }

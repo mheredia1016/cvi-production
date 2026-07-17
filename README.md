@@ -317,3 +317,8 @@ Adds receiving, local on-hand inventory, transaction history, S&S draft allocati
 ## ProductionOS v9.2 Garment Order Date Selector
 
 Adds an independent Today / Yesterday / Custom date selector for the S&S garment order. See `PRODUCTIONOS-V9-2-GARMENT-DATE.md`.
+
+
+# ProductionOS v10.0 Operator Workspace
+
+Adds dedicated production stations, one-piece workflow, batch label printing, Graphics Lab controls, and operator attribution. See `PRODUCTIONOS-V10-OPERATOR-WORKSPACE.md`.

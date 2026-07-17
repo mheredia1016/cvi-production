@@ -127,3 +127,139 @@ button.mini{padding:5px 8px;font-size:11px;margin-top:5px}
     min-width:0;
   }
 }
+
+
+.button-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#7138f4;
+  color:#fff;
+  text-decoration:none;
+  border-radius:10px;
+  padding:11px 16px;
+  font-weight:900;
+}
+.disabled-link{opacity:.35;pointer-events:none}
+
+.station-dashboard-header,.station-topbar,.station-overview,.station-primary-actions,
+.station-progress-numbers,.current-piece-header,.station-navigation{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.station-date-label,.station-operator label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-weight:800;
+  color:#aac0e5;
+}
+.station-date-label input,.station-operator input{
+  background:#0f1420;
+  border:1px solid #415170;
+  color:#fff;
+  border-radius:9px;
+  padding:10px 12px;
+}
+.station-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:16px;
+}
+.station-card{
+  background:#0f1420;
+  border:1px solid #34425f;
+  border-radius:16px;
+  padding:20px;
+}
+.station-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.station-card h2{margin:0}
+.station-count{
+  min-width:48px;height:48px;border-radius:50%;
+  display:grid;place-items:center;background:#7138f4;color:#fff;
+  font-size:21px;font-weight:900;
+}
+.station-empty{opacity:.48}
+
+.station-body{background:#090d15}
+.station-topbar{
+  position:sticky;top:0;z-index:20;
+  padding:16px 24px;background:#151c2a;border-bottom:1px solid #34425f;
+}
+.station-back{color:#fff;text-decoration:none;font-weight:900}
+.station-name{font-size:24px;font-weight:950}
+.station-workspace{max-width:1450px;margin:0 auto;padding:24px}
+.station-overview{margin-bottom:20px;align-items:stretch}
+.station-progress-card{
+  flex:1;background:#151c2a;border:1px solid #34425f;border-radius:15px;padding:18px;
+}
+.station-progress-track{
+  height:13px;border-radius:999px;background:#090d15;overflow:hidden;margin-top:13px;
+}
+.station-progress-fill{height:100%;background:#7138f4;transition:width .25s}
+.station-primary-actions{flex-wrap:wrap}
+.current-piece-card{
+  background:#151c2a;border:1px solid #34425f;border-radius:20px;
+  padding:26px;min-height:560px;
+}
+.station-position{text-transform:uppercase;letter-spacing:.08em;color:#a9bde1;font-weight:900}
+.current-piece-header h1{font-size:46px;margin:5px 0}
+.piece-badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.badge{
+  background:#27334a;border:1px solid #415170;border-radius:999px;
+  padding:8px 12px;font-weight:900;text-transform:uppercase;font-size:12px;
+}
+.rush-badge{background:#a8161d;border-color:#e04449}
+.piece-information-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;margin:24px 0;
+}
+.piece-info-box{
+  background:#0f1420;border:1px solid #34425f;border-radius:14px;padding:16px;
+  display:flex;flex-direction:column;gap:7px;min-height:130px;
+}
+.piece-info-box span{color:#aac0e5}
+.piece-info-box b{font-size:18px}
+.production-control-panel{
+  display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;
+}
+.print-side-card,.finish-piece-panel,.dtf-coming-soon{
+  background:#0f1420;border:1px solid #34425f;border-radius:16px;padding:20px;
+}
+.side-complete{border-color:#2fcf8f;box-shadow:inset 0 0 0 1px #2fcf8f}
+.finish-piece-panel{grid-column:1/-1;text-align:center}
+.finish-piece-button{font-size:20px;padding:16px 26px}
+.station-navigation{
+  grid-column:1/-1;margin-top:10px;padding-top:18px;border-top:1px solid #34425f;
+}
+.dtf-control-panel{grid-template-columns:1fr}
+.dtf-coming-soon{text-align:center;padding:40px}
+.station-complete-screen{text-align:center;padding:80px 20px}
+.station-complete-check{
+  width:100px;height:100px;border-radius:50%;background:#2fcf8f;color:#07130e;
+  display:grid;place-items:center;font-size:60px;font-weight:950;margin:0 auto 20px;
+}
+.station-queue-list{margin-top:20px}
+.queue-list-row{
+  width:100%;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+  text-align:left;background:#0f1420;color:#fff;border:1px solid #34425f;
+  padding:12px;margin-bottom:6px;border-radius:9px;
+}
+.queue-list-row.active{border-color:#7138f4;background:#211943}
+.empty-station{text-align:center;padding:100px 20px;color:#aac0e5}
+
+@media(max-width:900px){
+  .station-topbar,.station-overview,.current-piece-header{align-items:flex-start;flex-direction:column}
+  .piece-information-grid,.production-control-panel{grid-template-columns:1fr 1fr}
+  .station-primary-actions{width:100%}
+}
+@media(max-width:620px){
+  .station-workspace{padding:12px}
+  .piece-information-grid,.production-control-panel{grid-template-columns:1fr}
+  .current-piece-card{padding:16px}
+  .current-piece-header h1{font-size:34px}
+  .station-navigation{flex-wrap:wrap}
+  .queue-list-row{grid-template-columns:1fr 1fr}
+}
