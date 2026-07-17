@@ -297,3 +297,8 @@ Adds credential testing, automatic product matching, warehouse inventory, pricin
 ## v8.5 S&S Blank Garment Mappings
 
 Maps production garment names to S&S brand/style before matching color and size. Includes Basic Unisex Heavy Cotton T-Shirt → Gildan 5000. See `V8-5-SS-GARMENT-MAPPINGS.md`.
+
+
+## v8.6 S&S Mapped Catalog Sync
+
+Corrects mapped style requests to use identifiers such as `Gildan 5000` and syncs all color/size variants for mapped blanks. See `V8-6-SS-CATALOG-SYNC.md`.

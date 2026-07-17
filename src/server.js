@@ -26,11 +26,11 @@ app.use("/api/printer", printerRouter);
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    service: "ProductionOS v8.5",
+    service: "ProductionOS v8.6",
     mode: "SHADOW"
   });
 });
 
 app.listen(config.port, () => {
-  console.log(`ProductionOS v8.5 running on port ${config.port}`);
+  console.log(`ProductionOS v8.6 running on port ${config.port}`);
 });

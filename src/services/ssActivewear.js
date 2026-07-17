@@ -1,5 +1,6 @@
 
 import { config } from "../config/config.js";
+import { runtimeStore } from "./runtimeStore.js";
 
 const styleCache = new Map();
 const skuCache = new Map();
@@ -44,6 +45,31 @@ function normalizeSize(value) {
   if (xSuffix) return `${xSuffix[1]}XL`;
 
   return clean;
+}
+
+
+function styleIdentifier(style, brand = "") {
+  const cleanStyle = String(style || "").trim();
+  const cleanBrand = String(brand || "").trim();
+
+  if (!cleanBrand) return cleanStyle;
+
+  const normalizedStyle = normalize(cleanStyle);
+  const normalizedBrand = normalize(cleanBrand);
+
+  if (normalizedStyle.startsWith(normalizedBrand)) {
+    return cleanStyle;
+  }
+
+  return `${cleanBrand} ${cleanStyle}`.trim();
+}
+
+function catalogKey(style, brand = "") {
+  return normalize(styleIdentifier(style, brand));
+}
+
+function getCatalogEntry(style, brand = "") {
+  return runtimeStore.ssCatalog.styles[catalogKey(style, brand)] || null;
 }
 
 function cacheValid(entry) {
@@ -152,23 +178,36 @@ function publicProduct(product) {
   };
 }
 
-async function productsForStyle(style) {
-  const cacheKey = normalize(style);
+async function productsForStyle(style, brand = "", { fresh = false } = {}) {
+  const identifier = styleIdentifier(style, brand);
+  const cacheKey = catalogKey(style, brand);
   const cached = styleCache.get(cacheKey);
-  if (cacheValid(cached)) return cached.value;
 
-  const query = encodeURIComponent(String(style || "").trim());
+  if (!fresh && cacheValid(cached)) return cached.value;
+
+  const query = encodeURIComponent(identifier);
+  const warehouseQuery = config.ss.warehouses.length
+    ? `&Warehouses=${encodeURIComponent(config.ss.warehouses.join(","))}`
+    : "";
+
   const { data, rateLimitRemaining } = await ssRequest(
-    `/products/?style=${query}&mediatype=json`
+    `/products/?style=${query}${warehouseQuery}&mediatype=json`
   );
   const products = Array.isArray(data) ? data : [];
 
-  styleCache.set(cacheKey, {
-    at: Date.now(),
-    value: { products, rateLimitRemaining }
-  });
+  if (products.length === 0) {
+    throw new Error(`S&S returned no products for mapped style "${identifier}".`);
+  }
 
-  return { products, rateLimitRemaining };
+  const value = {
+    identifier,
+    products,
+    rateLimitRemaining,
+    syncedAt: new Date().toISOString()
+  };
+
+  styleCache.set(cacheKey, { at: Date.now(), value });
+  return value;
 }
 
 export function ssConfigurationStatus() {
@@ -247,9 +286,17 @@ export async function matchSsProduct({
     throw new Error("Style, color, and size are required for automatic S&S matching.");
   }
 
-  if (fresh) styleCache.delete(normalize(style));
+  if (fresh) styleCache.delete(catalogKey(style, brand));
 
-  const { products, rateLimitRemaining } = await productsForStyle(style);
+  const catalogEntry = getCatalogEntry(style, brand);
+  const source = catalogEntry && !fresh
+    ? {
+        products: catalogEntry.products,
+        rateLimitRemaining: catalogEntry.rateLimitRemaining || null
+      }
+    : await productsForStyle(style, brand, { fresh });
+
+  const { products, rateLimitRemaining } = source;
   const normalizedStyle = normalize(style);
   const normalizedColor = normalize(color);
   const normalizedSize = normalizeSize(size);
@@ -307,6 +354,136 @@ export async function matchSsProduct({
     rateLimitRemaining
   };
 }
+
+
+export async function syncSsMappedCatalog(mappings = []) {
+  if (!credentialsConfigured()) {
+    throw new Error(
+      "S&S credentials are not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY in Railway."
+    );
+  }
+
+  const unique = [];
+  const seen = new Set();
+
+  for (const mapping of Array.isArray(mappings) ? mappings : []) {
+    const style = String(mapping?.style || "").trim();
+    const brand = String(mapping?.brand || "").trim();
+    if (!style) continue;
+
+    const key = catalogKey(style, brand);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({
+      garmentName: String(mapping?.garmentName || "").trim(),
+      brand,
+      style,
+      key,
+      identifier: styleIdentifier(style, brand)
+    });
+  }
+
+  if (unique.length === 0) {
+    throw new Error("No blank garment mappings are configured.");
+  }
+
+  const synced = [];
+  const errors = [];
+  let totalVariants = 0;
+  let rateLimitRemaining = null;
+
+  for (const mapping of unique) {
+    try {
+      const result = await productsForStyle(
+        mapping.style,
+        mapping.brand,
+        { fresh: true }
+      );
+
+      runtimeStore.ssCatalog.styles[mapping.key] = {
+        garmentName: mapping.garmentName,
+        brand: mapping.brand,
+        style: mapping.style,
+        identifier: result.identifier,
+        syncedAt: result.syncedAt,
+        rateLimitRemaining: result.rateLimitRemaining,
+        products: result.products
+      };
+
+      totalVariants += result.products.length;
+      rateLimitRemaining =
+        result.rateLimitRemaining ?? rateLimitRemaining;
+
+      synced.push({
+        garmentName: mapping.garmentName,
+        brand: mapping.brand,
+        style: mapping.style,
+        identifier: result.identifier,
+        variants: result.products.length,
+        syncedAt: result.syncedAt
+      });
+    } catch (error) {
+      errors.push({
+        garmentName: mapping.garmentName,
+        brand: mapping.brand,
+        style: mapping.style,
+        identifier: mapping.identifier,
+        error: error.message
+      });
+    }
+  }
+
+  const allCatalogEntries = Object.values(runtimeStore.ssCatalog.styles);
+  runtimeStore.ssCatalog.lastSyncAt = new Date().toISOString();
+  runtimeStore.ssCatalog.lastError = errors.length
+    ? `${errors.length} mapped style(s) failed to sync.`
+    : "";
+  runtimeStore.ssCatalog.syncedStyleCount = allCatalogEntries.length;
+  runtimeStore.ssCatalog.variantCount = allCatalogEntries.reduce(
+    (sum, entry) => sum + (Array.isArray(entry.products) ? entry.products.length : 0),
+    0
+  );
+
+  return {
+    success: errors.length === 0,
+    synced,
+    errors,
+    rateLimitRemaining,
+    catalog: ssCatalogStatus()
+  };
+}
+
+export function ssCatalogStatus() {
+  const styles = Object.values(runtimeStore.ssCatalog.styles).map((entry) => ({
+    garmentName: entry.garmentName || "",
+    brand: entry.brand || "",
+    style: entry.style || "",
+    identifier: entry.identifier || "",
+    syncedAt: entry.syncedAt || null,
+    variants: Array.isArray(entry.products) ? entry.products.length : 0
+  }));
+
+  return {
+    lastSyncAt: runtimeStore.ssCatalog.lastSyncAt,
+    lastError: runtimeStore.ssCatalog.lastError,
+    syncedStyleCount: styles.length,
+    variantCount: styles.reduce((sum, entry) => sum + entry.variants, 0),
+    styles
+  };
+}
+
+export function clearSsCatalog() {
+  runtimeStore.ssCatalog = {
+    styles: {},
+    lastSyncAt: null,
+    lastError: "",
+    syncedStyleCount: 0,
+    variantCount: 0
+  };
+  styleCache.clear();
+  skuCache.clear();
+}
+
 
 export function clearSsCache() {
   styleCache.clear();

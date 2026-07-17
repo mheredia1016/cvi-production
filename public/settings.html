@@ -45,9 +45,11 @@
       <div class="row">
         <button onclick="addMappingRow()">Add Mapping</button>
         <button onclick="saveMappings()">Save Mappings</button>
+        <button onclick="syncCatalog()">Save & Sync S&S Catalog</button>
       </div>
 
       <div id="mappingMsg"></div>
+      <div id="catalogMsg"></div>
 
       <details style="margin-top:18px">
         <summary>Railway persistence JSON</summary>
@@ -130,6 +132,33 @@ async function saveMappings(){
   mappingMsg.innerHTML=response.ok
     ? `<div class="success">✓ Saved ${data.mappings.length} garment mapping(s). Refresh the S&S inventory draft now.</div>`
     : `<div class="error">${escapeHtml(data.error||'Could not save mappings.')}</div>`;
+}
+
+async function syncCatalog(){
+  await saveMappings();
+  catalogMsg.innerHTML='<div class="muted">Syncing mapped S&S styles…</div>';
+
+  const response=await fetch('/api/manager/ss/catalog/sync',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({})
+  });
+  const data=await response.json();
+
+  const synced=(data.synced||[]).reduce((sum,entry)=>sum+Number(entry.variants||0),0);
+  const failed=(data.errors||[]).length;
+
+  catalogMsg.innerHTML=response.ok
+    ? `<div class="success">✓ Synced ${data.synced.length} style(s) and ${synced} variants.</div>`
+    : response.status===207
+      ? `<div class="warning">Synced ${synced} variants; ${failed} style(s) failed.</div>`
+      : `<div class="error">${escapeHtml(data.error||'Catalog sync failed.')}</div>`;
+
+  if(data.errors?.length){
+    catalogMsg.insertAdjacentHTML('beforeend',data.errors.map(entry=>
+      `<div class="error">${escapeHtml(entry.identifier)}: ${escapeHtml(entry.error)}</div>`
+    ).join(''));
+  }
 }
 
 async function savePrintOrder(){

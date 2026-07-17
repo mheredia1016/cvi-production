@@ -9,13 +9,17 @@ import { validateManagerDay } from "../services/managerValidation.js";
 import { buildSsDraft, summarizeSsDraft } from "../services/ssDraft.js";
 import {
   clearSsCache,
+  clearSsCatalog,
   getSsProductBySku,
   matchSsProduct,
+  ssCatalogStatus,
   ssConfigurationStatus,
+  syncSsMappedCatalog,
   testSsConnection
 } from "../services/ssActivewear.js";
 import {
   findSsGarmentMapping,
+  listSsGarmentMappings,
   resolveSsLookup
 } from "../services/ssGarmentMappings.js";
 
@@ -264,6 +268,36 @@ managerRouter.post("/reprint-label", (req, res) => {
 });
 
 
+
+
+managerRouter.get("/ss/catalog/status", (req, res) => {
+  res.json({
+    configuration: ssConfigurationStatus(),
+    catalog: ssCatalogStatus()
+  });
+});
+
+managerRouter.post("/ss/catalog/sync", async (req, res) => {
+  try {
+    const result = await syncSsMappedCatalog(listSsGarmentMappings());
+    res.status(result.success ? 200 : 207).json(result);
+  } catch (error) {
+    res.status(502).json({
+      success: false,
+      error: error.message,
+      catalog: ssCatalogStatus()
+    });
+  }
+});
+
+managerRouter.post("/ss/catalog/clear", (req, res) => {
+  clearSsCatalog();
+  res.json({
+    success: true,
+    message: "S&S mapped-style catalog cleared.",
+    catalog: ssCatalogStatus()
+  });
+});
 
 managerRouter.get("/ss/status", (req, res) => {
   res.json(ssConfigurationStatus());
@@ -530,6 +564,7 @@ managerRouter.get("/ss-draft", (req, res) => {
     draft,
     summary: summarizeSsDraft(draft),
     configuration: ssConfigurationStatus(),
+    catalog: ssCatalogStatus(),
     warning: config.ss.submitEnabled
       ? "S&S credentials are active. Live order submission is not included in v8.5."
       : "Live inventory is enabled when credentials are configured. Purchase-order submission remains disabled."

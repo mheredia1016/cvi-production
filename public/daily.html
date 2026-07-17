@@ -34,6 +34,7 @@
   <p class="muted">Built from the selected production date. Review quantities before any future S&S submission.</p>
   <div class="row">
     <button onclick="loadSsDraft()">Build / Refresh Draft</button>
+    <button onclick="syncSsCatalog()">Sync Mapped S&S Catalog</button>
     <button onclick="refreshAllSsInventory()">Refresh All S&S Inventory</button>
     <button class="secondary" onclick="testSsConnection()">Test S&S Connection</button>
     <button class="secondary" onclick="saveSsDraft()">Save Draft Changes</button>
@@ -42,6 +43,7 @@
     <button class="danger" onclick="submitSsDraft()">Submit to S&S — Disabled</button>
   </div>
   <div id="ssConnection"></div>
+  <div id="ssCatalogStatus"></div>
   <div id="ssDraftSummary"></div>
   <div id="ssDraft">No S&S draft built.</div>
 </section>
@@ -396,6 +398,7 @@ async function loadGarments(){
 
 
 let currentSsDraft=null;
+let currentSsCatalog=null;
 
 function ssDraftRow(item){
   const statuses=[
@@ -460,9 +463,16 @@ async function loadSsDraft(){
   }
 
   currentSsDraft=data.draft;
+  currentSsCatalog=data.catalog||null;
   ssConnection.innerHTML=data.configuration?.configured
     ? `<div class="success">✓ S&S credentials configured • Account ${escapeHtml(data.configuration.accountNumberMasked)}${data.configuration.warehouses?.length?' • Warehouses '+escapeHtml(data.configuration.warehouses.join(', ')):' • All warehouses'}</div>`
     : `<div class="error">S&S is not configured. Add SS_ACCOUNT_NUMBER and SS_API_KEY in Railway Variables.</div>`;
+
+  const catalog=data.catalog||{};
+  ssCatalogStatus.innerHTML=catalog.syncedStyleCount
+    ? `<div class="success">✓ Local S&S catalog: ${catalog.syncedStyleCount} mapped style(s), ${catalog.variantCount} variants • Last sync: ${catalog.lastSyncAt?new Date(catalog.lastSyncAt).toLocaleString():'unknown'}</div>`
+    : `<div class="warning">Local S&S catalog has not been synced. Click “Sync Mapped S&S Catalog” before refreshing inventory.</div>`;
+
   ssDraftSummary.innerHTML=`
     <div class="cards">
       <div class="metric"><span class="muted">Draft Lines</span><br><b>${data.summary.lines}</b></div>
@@ -635,12 +645,52 @@ async function testSsConnection(){
     : `<div class="error">${escapeHtml(data.error)}</div>`;
 }
 
+
+async function syncSsCatalog(){
+  ssConnection.innerHTML='<div class="muted">Syncing all mapped S&S styles and their color/size variants…</div>';
+
+  const response=await fetch('/api/manager/ss/catalog/sync',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({})
+  });
+  const data=await response.json();
+
+  if(!response.ok&&response.status!==207){
+    ssConnection.innerHTML='<div class="error">'+escapeHtml(data.error||'Catalog sync failed.')+'</div>';
+    return;
+  }
+
+  const synced=(data.synced||[]).reduce((sum,entry)=>sum+Number(entry.variants||0),0);
+  const failed=(data.errors||[]).length;
+
+  ssConnection.innerHTML=failed
+    ? `<div class="error">Catalog sync loaded ${synced} variants, but ${failed} mapped style(s) failed.</div>`
+    : `<div class="success">✓ Catalog sync complete: ${data.synced.length} mapped style(s), ${synced} variants. API requests remaining: ${escapeHtml(data.rateLimitRemaining??'unknown')}.</div>`;
+
+  if(data.errors?.length){
+    ssCatalogStatus.innerHTML=data.errors.map(entry=>
+      `<div class="error">${escapeHtml(entry.identifier)}: ${escapeHtml(entry.error)}</div>`
+    ).join('');
+  }else{
+    ssCatalogStatus.innerHTML=`<div class="success">✓ Local S&S catalog ready: ${data.catalog.syncedStyleCount} mapped style(s), ${data.catalog.variantCount} variants.</div>`;
+  }
+
+  currentSsCatalog=data.catalog||currentSsCatalog;
+  await loadSsDraft();
+}
+
 async function refreshAllSsInventory(){
   if(!currentSsDraft)await loadSsDraft();
   if(!currentSsDraft)return;
 
   await saveSsDraft();
-  ssConnection.innerHTML='<div class="muted">Matching garments and checking live S&S inventory…</div>';
+
+  if(!currentSsCatalog?.syncedStyleCount){
+    await syncSsCatalog();
+  }
+
+  ssConnection.innerHTML='<div class="muted">Matching garments against the local S&S catalog and checking live inventory…</div>';
 
   const response=await fetch('/api/manager/ss-draft/refresh-inventory',{
     method:'POST',
